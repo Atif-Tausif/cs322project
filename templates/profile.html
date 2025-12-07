@@ -67,6 +67,61 @@
             </div>
             {% endif %}
             
+            <!-- Complaints Against Me -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Complaints Against Me</h5>
+                </div>
+                <div class="card-body">
+                    {% if my_complaints %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for complaint in my_complaints %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if complaint.complaint_type == 'complaint' else 'success' }}">
+                                            {{ complaint.complaint_type|title }}
+                                        </span>
+                                    </td>
+                                    <td>{{ complaint.description[:50] }}...</td>
+                                    <td>
+                                        {% if complaint.status == 'disputed' %}
+                                        <span class="badge bg-warning">Disputed</span>
+                                        {% elif complaint.status == 'resolved' %}
+                                        <span class="badge bg-{{ 'success' if complaint.dispute_resolution == 'dismissed' else 'danger' }}">
+                                            {{ complaint.dispute_resolution|title if complaint.dispute_resolution else 'Resolved' }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if complaint.status == 'pending' and not complaint.disputed %}
+                                        <button class="btn btn-sm btn-warning" onclick="disputeComplaint('{{ complaint.id }}')">
+                                            <i class="fas fa-gavel"></i> Dispute
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">No complaints filed against you</p>
+                    {% endif %}
+                </div>
+            </div>
+            
             <div class="card">
                 <div class="card-header">
                     <h5><i class="fas fa-receipt"></i> Recent Orders</h5>
@@ -107,4 +162,30 @@
         </div>
     </div>
 </div>
+
+<script>
+function disputeComplaint(complaintId) {
+    if (!confirm('Are you sure you want to dispute this complaint?')) {
+        return;
+    }
+    
+    $.ajax({
+        url: '/api/v1/complaint/dispute',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ complaint_id: complaintId }),
+        success: function(response) {
+            if (response.success) {
+                alert('Complaint disputed successfully');
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to dispute complaint');
+            }
+        },
+        error: function() {
+            alert('Error disputing complaint');
+        }
+    });
+}
+</script>
 {% endblock %}

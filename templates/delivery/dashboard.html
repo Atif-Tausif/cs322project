@@ -111,7 +111,89 @@
             {% endif %}
         </div>
     </div>
+    
+    <!-- File Complaints About Customers -->
+    <div class="card">
+        <div class="card-header">
+            <h5><i class="fas fa-comment-alt"></i> File Complaint/Compliment About Customers</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">You can file complaints or compliments about customers you have delivered to.</p>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#customerComplaintModal">
+                <i class="fas fa-plus"></i> File Complaint/Compliment
+            </button>
+        </div>
+    </div>
 </div>
+
+<!-- Customer Complaint Modal -->
+<div class="modal fade" id="customerComplaintModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">File Complaint/Compliment About Customer</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="customerComplaintForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="customerId" class="form-label">Customer Username</label>
+                        <input type="text" class="form-control" id="customerId" name="target_id" required>
+                        <small class="form-text text-muted">Enter the username of the customer</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="complaintType" class="form-label">Type</label>
+                        <select class="form-select" id="complaintType" name="complaint_type" required>
+                            <option value="complaint">Complaint</option>
+                            <option value="compliment">Compliment</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="complaintDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="complaintDescription" name="description" rows="4" required></textarea>
+                    </div>
+                    <input type="hidden" name="target_type" value="customer">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$('#customerComplaintForm').on('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const data = {
+        target_id: formData.get('target_id'),
+        target_type: 'customer',
+        complaint_type: formData.get('complaint_type'),
+        description: formData.get('description')
+    };
+    
+    $.ajax({
+        url: '/api/v1/complaint',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(response) {
+            if (response.success) {
+                alert('Complaint/compliment filed successfully!');
+                $('#customerComplaintModal').modal('hide');
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to file complaint');
+            }
+        },
+        error: function() {
+            alert('Error filing complaint');
+        }
+    });
+});
+</script>
 
 <!-- Bid Modal -->
 <div class="modal fade" id="bidModal" tabindex="-1">

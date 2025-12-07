@@ -10,7 +10,7 @@ from database import (
     get_all_forum_posts, get_forum_post_by_id, save_forum_post, delete_user
 )
 from services import (
-    process_order, submit_rating, file_complaint, resolve_complaint,
+    process_order, submit_rating, file_complaint, resolve_complaint, dispute_complaint,
     submit_delivery_bid, accept_delivery_bid,
     get_popular_dishes, get_top_rated_dishes, get_featured_chefs
 )
@@ -103,6 +103,13 @@ def register():
             flash('Username already exists', 'danger')
             return render_template('register.html')
         
+        # Check if user is blacklisted
+        all_users = get_all_users()
+        blacklisted_user = next((u for u in all_users if u.username == username and u.blacklisted), None)
+        if blacklisted_user:
+            flash('This account has been blacklisted and cannot register again', 'danger')
+            return render_template('register.html')
+        
         # Create new user
         user = User(
             username=username,
@@ -137,12 +144,17 @@ def profile():
     user = get_current_user()
     orders = get_orders_by_customer(user.id)
     
+    # Get complaints against this user
+    from database import get_complaints_by_target
+    my_complaints = get_complaints_by_target(user.id)
+    
     # Get flavor profile analysis for VIP
     flavor_analysis = None
     if user.role == 'vip':
         flavor_analysis = get_flavor_profile_analysis(user.id)
     
-    return render_template('profile.html', user=user, orders=orders[:10], flavor_analysis=flavor_analysis)
+    return render_template('profile.html', user=user, orders=orders[:10], 
+                         flavor_analysis=flavor_analysis, my_complaints=my_complaints)
 
 @bp.route('/orders')
 @require_login
@@ -411,7 +423,29 @@ def api_complaint():
         return jsonify({'success': False, 'message': 'Missing required fields'})
     
     user_id = session.get('user_id')
+    user = get_current_user()
+    
+    # Delivery personnel can only complain about customers
+    if user.role == 'delivery' and target_type != 'customer':
+        return jsonify({'success': False, 'message': 'Delivery personnel can only file complaints about customers'})
+    
     success, message = file_complaint(user_id, target_id, target_type, complaint_type, description)
+    
+    return jsonify({'success': success, 'message': message})
+
+@bp.route('/api/v1/complaint/dispute', methods=['POST'])
+@require_login
+@require_approved
+def api_dispute_complaint():
+    """Dispute a complaint"""
+    data = request.get_json()
+    complaint_id = data.get('complaint_id')
+    
+    if not complaint_id:
+        return jsonify({'success': False, 'message': 'Complaint ID required'})
+    
+    user_id = session.get('user_id')
+    success, message = dispute_complaint(complaint_id, user_id)
     
     return jsonify({'success': success, 'message': message})
 
@@ -497,6 +531,52 @@ def api_cart_update():
     
     return jsonify({'success': False, 'message': 'Item not in cart'})
 
+@bp.route('/api/v1/knowledge/rate', methods=['POST'])
+@require_login
+def api_rate_knowledge():
+    """Rate a knowledge base entry"""
+    data = request.get_json()
+    entry_id = data.get('entry_id')
+    rating = int(data.get('rating', 0))
+    
+    if not entry_id:
+        return jsonify({'success': False, 'message': 'Entry ID required'})
+    
+    user_id = session.get('user_id')
+    from database import save_knowledge_rating
+    save_knowledge_rating(entry_id, rating, user_id)
+    
+    # If rating is 0, flag for manager
+    if rating == 0:
+        return jsonify({'success': True, 'message': 'Rating submitted. Entry flagged for manager review.'})
+    
+    return jsonify({'success': True, 'message': 'Rating submitted'})
+
+@bp.route('/api/v1/knowledge/submit', methods=['POST'])
+@require_login
+@require_approved
+def api_submit_knowledge():
+    """Submit a knowledge base entry (customer contribution)"""
+    data = request.get_json()
+    question = data.get('question', '').strip()
+    answer = data.get('answer', '').strip()
+    tags = data.get('tags', [])
+    
+    if not question or not answer:
+        return jsonify({'success': False, 'message': 'Question and answer are required'})
+    
+    user_id = session.get('user_id')
+    from database import save_knowledge_entry
+    save_knowledge_entry({
+        'question': question,
+        'answer': answer,
+        'tags': tags if isinstance(tags, list) else [],
+        'author_id': user_id,
+        'approved': False  # Requires manager approval
+    })
+    
+    return jsonify({'success': True, 'message': 'Knowledge entry submitted. Pending manager approval.'})
+
 # ============================================================================
 # Manager Routes
 # ============================================================================
@@ -513,16 +593,44 @@ def manager_dashboard():
     # Get pending complaints
     from database import get_all_complaints
     complaints = get_all_complaints()
-    pending_complaints = [c for c in complaints if c.status == 'pending']
+    pending_complaints = [c for c in complaints if c.status in ['pending', 'disputed']]
     
     # Get pending orders
     orders = get_all_orders()
     pending_orders = [o for o in orders if o.status in ['pending', 'preparing']]
     
+    # Get orders ready for delivery with bids
+    ready_orders = [o for o in orders if o.status == 'ready']
+    orders_with_bids = []
+    from database import get_bids_by_order
+    for order in ready_orders:
+        bids = get_bids_by_order(order.id)
+        if bids:
+            # Add delivery person names to bids
+            for bid in bids:
+                delivery_person = get_user_by_id(bid.delivery_person_id)
+                bid.delivery_person_name = delivery_person.username if delivery_person else 'Unknown'
+            orders_with_bids.append({
+                'order': order,
+                'bids': sorted(bids, key=lambda b: b.bid_amount)
+            })
+    
+    # Get flagged knowledge base entries
+    from database import get_flagged_knowledge_entries
+    flagged_kb = get_flagged_knowledge_entries()
+    
+    # Get pending knowledge base submissions
+    from database import get_knowledge_base
+    kb_entries = get_knowledge_base()
+    pending_kb = [e for e in kb_entries if e.get('author_id') and not e.get('approved', False)]
+    
     return render_template('manager/dashboard.html',
                          pending_users=pending_users,
                          pending_complaints=pending_complaints,
-                         pending_orders=pending_orders)
+                         pending_orders=pending_orders,
+                         orders_with_bids=orders_with_bids,
+                         flagged_kb=flagged_kb,
+                         pending_kb=pending_kb)
 
 @bp.route('/manager/approve/<user_id>', methods=['POST'])
 @require_login
@@ -545,6 +653,85 @@ def manager_reject_user(user_id):
     if user:
         delete_user(user_id)
         flash(f'User {user.username} rejected', 'info')
+    return redirect(url_for('main.manager_dashboard'))
+
+@bp.route('/manager/complaint/resolve/<complaint_id>', methods=['POST'])
+@require_login
+@require_role('manager')
+def manager_resolve_complaint(complaint_id):
+    """Resolve a complaint"""
+    resolution = request.form.get('resolution')  # 'upheld' or 'dismissed'
+    manager_id = session.get('user_id')
+    
+    success, message = resolve_complaint(complaint_id, manager_id, resolution)
+    if success:
+        flash(message, 'success')
+    else:
+        flash(message, 'danger')
+    
+    return redirect(url_for('main.manager_dashboard'))
+
+@bp.route('/manager/knowledge/approve/<entry_id>', methods=['POST'])
+@require_login
+@require_role('manager')
+def manager_approve_knowledge(entry_id):
+    """Approve a knowledge base entry"""
+    from database import get_knowledge_base, save_json, KNOWLEDGE_BASE_FILE, load_json
+    entries = get_knowledge_base()
+    user_entries = load_json(KNOWLEDGE_BASE_FILE, [])
+    
+    for entry in user_entries:
+        if entry.get('id') == entry_id:
+            entry['approved'] = True
+            entry['flagged'] = False
+            save_json(KNOWLEDGE_BASE_FILE, user_entries)
+            flash('Knowledge entry approved', 'success')
+            break
+    
+    return redirect(url_for('main.manager_dashboard'))
+
+@bp.route('/manager/knowledge/remove/<entry_id>', methods=['POST'])
+@require_login
+@require_role('manager')
+def manager_remove_knowledge(entry_id):
+    """Remove a bad knowledge base entry and ban author"""
+    from database import delete_knowledge_entry, get_knowledge_base, get_user_by_id, save_user
+    from database import load_json, save_json, KNOWLEDGE_BASE_FILE
+    
+    # Get entry to find author
+    entries = get_knowledge_base()
+    entry = next((e for e in entries if e.get('id') == entry_id), None)
+    
+    if entry and entry.get('author_id'):
+        # Ban author from contributing
+        author = get_user_by_id(entry['author_id'])
+        if author:
+            author.blacklisted = True
+            save_user(author)
+            flash(f'Entry removed and author {author.username} banned from contributing', 'info')
+    
+    # Remove entry
+    delete_knowledge_entry(entry_id)
+    
+    return redirect(url_for('main.manager_dashboard'))
+
+@bp.route('/manager/delivery/accept', methods=['POST'])
+@require_login
+@require_role('manager')
+def manager_accept_bid():
+    """Accept a delivery bid"""
+    order_id = request.form.get('order_id')
+    bid_id = request.form.get('bid_id')
+    memo = request.form.get('memo', '').strip()
+    
+    manager_id = session.get('user_id')
+    success, message = accept_delivery_bid(order_id, bid_id, manager_id, memo)
+    
+    if success:
+        flash(message, 'success')
+    else:
+        flash(message, 'danger')
+    
     return redirect(url_for('main.manager_dashboard'))
 
 # ============================================================================

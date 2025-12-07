@@ -26,8 +26,8 @@
         <div class="col-md-4">
             <div class="card bg-info text-white">
                 <div class="card-body">
-                    <h5>Pending Orders</h5>
-                    <h2>{{ pending_orders|length }}</h2>
+                    <h5>Orders with Bids</h5>
+                    <h2>{{ orders_with_bids|length }}</h2>
                 </div>
             </div>
         </div>
@@ -111,7 +111,12 @@
                             <td>{{ complaint.description[:50] }}...</td>
                             <td>{{ complaint.created_at[:10] }}</td>
                             <td>
-                                <a href="#" class="btn btn-sm btn-primary">View Details</a>
+                                {% if complaint.disputed %}
+                                <span class="badge bg-warning">Disputed</span>
+                                {% endif %}
+                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#resolveModal{{ complaint.id }}">
+                                    Resolve
+                                </button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -123,5 +128,207 @@
             {% endif %}
         </div>
     </div>
+    
+    <!-- Orders with Delivery Bids -->
+    {% if orders_with_bids %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-truck"></i> Orders Ready for Delivery (with Bids)</h5>
+        </div>
+        <div class="card-body">
+            {% for item in orders_with_bids %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <strong>Order #{{ item.order.id[:8] }}</strong> - Total: ${{ item.order.total|round(2) }}
+                </div>
+                <div class="card-body">
+                    <h6>Delivery Bids:</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Delivery Person</th>
+                                <th>Bid Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bid in item.bids %}
+                            <tr class="{{ 'table-success' if bid == item.bids[0] else '' }}">
+                                <td>{{ bid.delivery_person_name }}</td>
+                                <td>${{ bid.bid_amount|round(2) }}</td>
+                                <td>
+                                    {% if bid == item.bids[0] %}
+                                    <span class="badge bg-success">Lowest</span>
+                                    {% endif %}
+                                    <button class="btn btn-sm btn-primary" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#acceptBidModal{{ bid.id }}"
+                                            {% if bid != item.bids[0] %}title="Requires memo"{% endif %}>
+                                        Accept
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Accept Bid Modal -->
+            {% for bid in item.bids %}
+            <div class="modal fade" id="acceptBidModal{{ bid.id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Accept Delivery Bid</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form method="POST" action="{{ url_for('main.manager_accept_bid') }}">
+                            <input type="hidden" name="order_id" value="{{ item.order.id }}">
+                            <input type="hidden" name="bid_id" value="{{ bid.id }}">
+                            <div class="modal-body">
+                                <p><strong>Delivery Person:</strong> {{ bid.delivery_person_name }}</p>
+                                <p><strong>Bid Amount:</strong> ${{ bid.bid_amount|round(2) }}</p>
+                                {% if bid != item.bids[0] %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle"></i> 
+                                    This is not the lowest bid. A memo is required.
+                                </div>
+                                <div class="mb-3">
+                                    <label for="memo{{ bid.id }}" class="form-label">Justification Memo *</label>
+                                    <textarea class="form-control" id="memo{{ bid.id }}" name="memo" rows="3" required></textarea>
+                                </div>
+                                {% else %}
+                                <input type="hidden" name="memo" value="">
+                                {% endif %}
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Accept Bid</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Flagged Knowledge Base Entries -->
+    {% if flagged_kb %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-flag"></i> Flagged Knowledge Base Entries</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Question</th>
+                            <th>Answer</th>
+                            <th>Author</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in flagged_kb %}
+                        <tr>
+                            <td>{{ entry.question }}</td>
+                            <td>{{ entry.answer[:50] }}...</td>
+                            <td>{{ entry.author_id or 'System' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('main.manager_approve_knowledge', entry_id=entry.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success">Keep</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('main.manager_remove_knowledge', entry_id=entry.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove entry and ban author?')">Remove & Ban</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Pending Knowledge Base Submissions -->
+    {% if pending_kb %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-book"></i> Pending Knowledge Base Submissions</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Question</th>
+                            <th>Answer</th>
+                            <th>Author</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in pending_kb %}
+                        <tr>
+                            <td>{{ entry.question }}</td>
+                            <td>{{ entry.answer[:50] }}...</td>
+                            <td>{{ entry.author_id or 'Unknown' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('main.manager_approve_knowledge', entry_id=entry.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('main.manager_remove_knowledge', entry_id=entry.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<!-- Resolve Complaint Modal -->
+{% for complaint in pending_complaints %}
+<div class="modal fade" id="resolveModal{{ complaint.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Resolve Complaint</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('main.manager_resolve_complaint', complaint_id=complaint.id) }}">
+                <div class="modal-body">
+                    <p><strong>Description:</strong> {{ complaint.description }}</p>
+                    {% if complaint.disputed %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> This complaint has been disputed.
+                    </div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label">Resolution</label>
+                        <select class="form-select" name="resolution" required>
+                            <option value="upheld">Upheld (Complaint is valid)</option>
+                            <option value="dismissed">Dismissed (Complaint is false)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Resolve</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
 {% endblock %}

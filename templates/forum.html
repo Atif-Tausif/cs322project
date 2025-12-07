@@ -11,6 +11,11 @@
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newPostModal">
             <i class="fas fa-plus"></i> New Post
         </button>
+        {% if session.user.role in ['customer', 'vip'] %}
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#knowledgeModal">
+            <i class="fas fa-book"></i> Contribute to Knowledge Base
+        </button>
+        {% endif %}
     </div>
     {% endif %}
     
@@ -97,6 +102,74 @@ $('#newPostForm').on('submit', function(e) {
     e.preventDefault();
     // Forum posting would be implemented via API endpoint
     alert('Forum posting feature coming soon!');
+});
+</script>
+{% endif %}
+
+<!-- Knowledge Base Contribution Modal -->
+{% if session.user and session.user.role in ['customer', 'vip'] %}
+<div class="modal fade" id="knowledgeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Contribute to Knowledge Base</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="knowledgeForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="kbQuestion" class="form-label">Question *</label>
+                        <input type="text" class="form-control" id="kbQuestion" name="question" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="kbAnswer" class="form-label">Answer *</label>
+                        <textarea class="form-control" id="kbAnswer" name="answer" rows="4" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tags (optional)</label>
+                        <input type="text" class="form-control" id="kbTags" name="tags" placeholder="e.g., hours, delivery, payment">
+                        <small class="form-text text-muted">Separate tags with commas</small>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Your contribution will be reviewed by the manager before being added to the knowledge base.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$('#knowledgeForm').on('submit', function(e) {
+    e.preventDefault();
+    const tags = $('#kbTags').val().split(',').map(t => t.trim()).filter(t => t);
+    
+    $.ajax({
+        url: '/api/v1/knowledge/submit',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            question: $('#kbQuestion').val(),
+            answer: $('#kbAnswer').val(),
+            tags: tags
+        }),
+        success: function(response) {
+            if (response.success) {
+                alert(response.message);
+                $('#knowledgeModal').modal('hide');
+                $('#knowledgeForm')[0].reset();
+            } else {
+                alert(response.message || 'Failed to submit');
+            }
+        },
+        error: function() {
+            alert('Error submitting knowledge entry');
+        }
+    });
 });
 </script>
 {% endif %}

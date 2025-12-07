@@ -21,6 +21,7 @@ class User:
         self.complaints_count = kwargs.get('complaints_count', 0)
         self.created_at = kwargs.get('created_at', datetime.now().isoformat())
         self.approved = kwargs.get('approved', False)  # For customer registration approval
+        self.blacklisted = kwargs.get('blacklisted', False)  # Blacklist flag
         
         # Employee-specific fields
         self.salary = kwargs.get('salary', 0.0)
@@ -62,6 +63,7 @@ class User:
             'complaints_count': self.complaints_count,
             'created_at': self.created_at,
             'approved': self.approved,
+            'blacklisted': self.blacklisted,
             'salary': self.salary,
             'rating': self.rating,
             'ratings_count': self.ratings_count,
@@ -276,6 +278,7 @@ class DeliveryBid:
         self.bid_amount = bid_amount
         self.status = kwargs.get('status', 'pending')  # 'pending', 'accepted', 'rejected'
         self.created_at = kwargs.get('created_at', datetime.now().isoformat())
+        self.manager_memo = kwargs.get('manager_memo', None)  # Memo when choosing higher bid
     
     def to_dict(self) -> Dict:
         """Convert delivery bid to dictionary"""
@@ -285,7 +288,8 @@ class DeliveryBid:
             'delivery_person_id': self.delivery_person_id,
             'bid_amount': self.bid_amount,
             'status': self.status,
-            'created_at': self.created_at
+            'created_at': self.created_at,
+            'manager_memo': self.manager_memo
         }
     
     @classmethod

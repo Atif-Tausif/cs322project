@@ -146,12 +146,20 @@ def file_complaint(complainant_id: str, target_id: str, target_type: str,
                   complaint_type: str, description: str) -> Tuple[bool, str]:
     """
     File a complaint or compliment
+    Can be filed by customers or delivery personnel
     """
     complainant = get_user_by_id(complainant_id)
     target = get_user_by_id(target_id)
     
     if not complainant or not target:
         return False, "User not found"
+    
+    # Allow delivery personnel to complain/compliment customers they delivered to
+    if complainant.role == 'delivery' and target_type != 'customer':
+        return False, "Delivery personnel can only file complaints/compliments about customers"
+    
+    if complainant.role not in ['customer', 'vip', 'delivery']:
+        return False, "Only customers and delivery personnel can file complaints/compliments"
     
     complaint = Complaint(
         complainant_id=complainant_id,
@@ -164,11 +172,14 @@ def file_complaint(complainant_id: str, target_id: str, target_type: str,
     save_complaint(complaint)
     
     # Update counts
+    # VIP complaints/compliments count twice
+    weight = 2 if complainant.role == 'vip' else 1
+    
     if complaint_type == 'complaint':
-        target.complaints_count += 1
+        target.complaints_count += weight
         complainant.complaints_count += 1
     else:  # compliment
-        target.compliments += 1
+        target.compliments += weight
     
     save_user(target)
     save_user(complainant)
@@ -206,6 +217,28 @@ def check_employee_performance(employee):
     
     save_user(employee)
 
+def dispute_complaint(complaint_id: str, user_id: str) -> Tuple[bool, str]:
+    """
+    Dispute a complaint (by the target user)
+    """
+    complaints = get_all_complaints()
+    complaint = next((c for c in complaints if c.id == complaint_id), None)
+    
+    if not complaint:
+        return False, "Complaint not found"
+    
+    if complaint.target_id != user_id:
+        return False, "You can only dispute complaints filed against you"
+    
+    if complaint.status != 'pending':
+        return False, "Complaint has already been resolved"
+    
+    complaint.disputed = True
+    complaint.status = 'disputed'
+    save_complaint(complaint)
+    
+    return True, "Complaint disputed successfully"
+
 def resolve_complaint(complaint_id: str, manager_id: str, resolution: str) -> Tuple[bool, str]:
     """
     Resolve a complaint (manager only)
@@ -227,6 +260,9 @@ def resolve_complaint(complaint_id: str, manager_id: str, resolution: str) -> Tu
             complainant.warnings += 1
             save_user(complainant)
             check_customer_warnings(complainant)
+        complaint.dispute_resolution = 'dismissed'
+    elif resolution == 'upheld':
+        complaint.dispute_resolution = 'upheld'
     
     save_complaint(complaint)
     return True, "Complaint resolved"
@@ -241,10 +277,12 @@ def check_customer_warnings(customer):
         if customer.warnings >= max_warnings:
             if customer.role == 'vip':
                 customer.role = 'customer'
+                customer.warnings = 0  # Clear warnings on downgrade
             else:
-                # Deregister customer
+                # Deregister customer and blacklist
                 customer.approved = False
                 customer.role = 'visitor'
+                customer.blacklisted = True
                 # Refund balance
                 # (In a real system, you'd process the refund)
             save_user(customer)
@@ -273,9 +311,10 @@ def submit_delivery_bid(order_id: str, delivery_person_id: str, bid_amount: floa
     save_delivery_bid(bid)
     return True, "Bid submitted successfully"
 
-def accept_delivery_bid(order_id: str, bid_id: str, manager_id: str) -> Tuple[bool, str]:
+def accept_delivery_bid(order_id: str, bid_id: str, manager_id: str, memo: str = None) -> Tuple[bool, str]:
     """
     Accept a delivery bid (manager or system)
+    If choosing a higher bid, memo is required
     """
     bids = get_all_delivery_bids()
     bid = next((b for b in bids if b.id == bid_id and b.order_id == order_id), None)
@@ -287,8 +326,17 @@ def accept_delivery_bid(order_id: str, bid_id: str, manager_id: str) -> Tuple[bo
     if not order:
         return False, "Order not found"
     
-    # Reject other bids
+    # Check if this is not the lowest bid
     all_bids = get_bids_by_order(order_id)
+    lowest_bid = min(all_bids, key=lambda b: b.bid_amount) if all_bids else None
+    
+    if lowest_bid and bid.id != lowest_bid.id and bid.bid_amount > lowest_bid.bid_amount:
+        # Choosing higher bid - memo required
+        if not memo or not memo.strip():
+            return False, "Memo is required when choosing a bid higher than the lowest bid"
+        bid.manager_memo = memo.strip()
+    
+    # Reject other bids
     for other_bid in all_bids:
         if other_bid.id != bid_id:
             other_bid.status = 'rejected'

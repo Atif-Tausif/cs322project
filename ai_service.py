@@ -5,6 +5,7 @@ import requests
 import json
 from typing import Dict, List, Optional, Tuple
 from config import LLMConfig, KNOWLEDGE_BASE
+from database import get_knowledge_base, save_knowledge_rating, get_flagged_knowledge_entries
 from database import get_all_dishes, get_user_by_id, get_orders_by_customer
 from utils import calculate_flavor_match
 
@@ -15,15 +16,23 @@ def search_knowledge_base(query: str) -> Optional[Dict]:
     """
     query_lower = query.lower()
     
-    for entry in KNOWLEDGE_BASE:
+    # Get all knowledge base entries (default + user-contributed)
+    entries = get_knowledge_base()
+    
+    for entry in entries:
+        # Skip unapproved user entries
+        if entry.get('author_id') and not entry.get('approved', False):
+            continue
+        
         # Check if query matches question or tags
         question_match = entry['question'].lower() in query_lower or query_lower in entry['question'].lower()
         tag_match = any(tag.lower() in query_lower for tag in entry.get('tags', []))
         
         if question_match or tag_match:
+            entry_id = entry.get('id', f"kb_{hash(entry.get('question', ''))}")
             return {
                 'answer': entry['answer'],
-                'entry_id': f"kb_{hash(entry['question'])}",
+                'entry_id': entry_id,
                 'source': 'knowledge_base'
             }
     

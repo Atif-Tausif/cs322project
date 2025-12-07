@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 from typing import List, Dict, Optional, Any
+from datetime import datetime
 from config import DATA_DIR
 from models import User, Dish, Order, Rating, Complaint, ForumPost, DeliveryBid
 
@@ -16,6 +17,8 @@ RATINGS_FILE = DATA_DIR / "ratings.json"
 COMPLAINTS_FILE = DATA_DIR / "complaints.json"
 FORUM_POSTS_FILE = DATA_DIR / "forum_posts.json"
 DELIVERY_BIDS_FILE = DATA_DIR / "delivery_bids.json"
+KNOWLEDGE_BASE_FILE = DATA_DIR / "knowledge_base.json"
+KNOWLEDGE_RATINGS_FILE = DATA_DIR / "knowledge_ratings.json"
 
 def ensure_data_dir():
     """Ensure data directory exists"""
@@ -222,10 +225,69 @@ def save_delivery_bid(bid: DeliveryBid):
     
     save_json(DELIVERY_BIDS_FILE, [b.to_dict() for b in bids])
 
+# Knowledge base operations
+def get_knowledge_base() -> List[Dict]:
+    """Get all knowledge base entries"""
+    data = load_json(KNOWLEDGE_BASE_FILE, [])
+    # Merge with default knowledge base from config
+    from config import KNOWLEDGE_BASE as DEFAULT_KB
+    default_ids = {hash(entry['question']) for entry in DEFAULT_KB}
+    user_entries = [e for e in data if e.get('id') not in default_ids]
+    return DEFAULT_KB + user_entries
+
+def save_knowledge_entry(entry: Dict):
+    """Save a knowledge base entry"""
+    entries = load_json(KNOWLEDGE_BASE_FILE, [])
+    entry['id'] = entry.get('id', f"kb_{hash(entry.get('question', ''))}")
+    entry['approved'] = entry.get('approved', False)  # Requires manager approval
+    entry['author_id'] = entry.get('author_id', '')
+    entries.append(entry)
+    save_json(KNOWLEDGE_BASE_FILE, entries)
+
+def delete_knowledge_entry(entry_id: str):
+    """Delete a knowledge base entry"""
+    entries = load_json(KNOWLEDGE_BASE_FILE, [])
+    entries = [e for e in entries if e.get('id') != entry_id]
+    save_json(KNOWLEDGE_BASE_FILE, entries)
+
+def save_knowledge_rating(entry_id: str, rating: int, user_id: str):
+    """Save rating for knowledge base entry"""
+    ratings = load_json(KNOWLEDGE_RATINGS_FILE, [])
+    ratings.append({
+        'entry_id': entry_id,
+        'rating': rating,
+        'user_id': user_id,
+        'created_at': datetime.now().isoformat()
+    })
+    save_json(KNOWLEDGE_RATINGS_FILE, ratings)
+    
+    # If rating is 0, flag for manager review
+    if rating == 0:
+        # Get entry and flag it
+        entries = get_knowledge_base()
+        entry = next((e for e in entries if e.get('id') == entry_id), None)
+        if entry:
+            entry['flagged'] = True
+            entry['flagged_by'] = user_id
+            if entry.get('id', '').startswith('kb_'):
+                # User-contributed entry, save to file
+                user_entries = load_json(KNOWLEDGE_BASE_FILE, [])
+                for i, e in enumerate(user_entries):
+                    if e.get('id') == entry_id:
+                        user_entries[i] = entry
+                        save_json(KNOWLEDGE_BASE_FILE, user_entries)
+                        break
+
+def get_flagged_knowledge_entries() -> List[Dict]:
+    """Get flagged knowledge base entries for manager review"""
+    entries = get_knowledge_base()
+    return [e for e in entries if e.get('flagged', False)]
+
 def reset_database():
     """Reset all database files (for initialization)"""
     ensure_data_dir()
     for file_path in [USERS_FILE, DISHES_FILE, ORDERS_FILE, RATINGS_FILE, 
-                      COMPLAINTS_FILE, FORUM_POSTS_FILE, DELIVERY_BIDS_FILE]:
+                      COMPLAINTS_FILE, FORUM_POSTS_FILE, DELIVERY_BIDS_FILE,
+                      KNOWLEDGE_BASE_FILE, KNOWLEDGE_RATINGS_FILE]:
         if file_path.exists():
             file_path.unlink()
