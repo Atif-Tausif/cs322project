@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Chef Dashboard - Smart Restaurant{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4"><i class="fas fa-utensils"></i> Chef Dashboard</h1>
+    
+    <div class="mb-3">
+        <a href="{{ url_for('main.chef_add_dish') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add New Dish
+        </a>
+    </div>
+    
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5>My Dishes</h5>
+                    <h2>{{ dishes|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Average Rating</h5>
+                    <h2>{{ user.rating|round(1) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Total Orders</h5>
+                    <h2>{{ dishes|sum(attribute='orders_count') }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h5>My Dishes</h5>
+        </div>
+        <div class="card-body">
+            {% if dishes %}
+            <div class="row">
+                {% for dish in dishes %}
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <img src="{{ dish.image }}" class="card-img-top" alt="{{ dish.name }}" style="height: 200px; object-fit: cover;">
+                        <div class="card-body">
+                            <h5>{{ dish.name }}</h5>
+                            <p class="text-muted">{{ dish.description[:50] }}...</p>
+                            <div class="d-flex justify-content-between">
+                                <span class="h5">${{ dish.price }}</span>
+                                <div class="rating">
+                                    {% for i in range(5) %}
+                                        {% if i < dish.rating|round|int %}
+                                        <i class="fas fa-star text-warning"></i>
+                                        {% else %}
+                                        <i class="far fa-star text-warning"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                {{ dish.orders_count }} orders | {{ dish.ratings_count }} ratings
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">No dishes yet. <a href="{{ url_for('main.chef_add_dish') }}">Add your first dish!</a></p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

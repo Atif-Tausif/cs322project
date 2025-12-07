@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Shopping Cart - Smart Restaurant{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4"><i class="fas fa-shopping-cart"></i> Shopping Cart</h1>
+    
+    {% if cart_items %}
+    <div class="row">
+        <div class="col-md-8">
+            {% for item in cart_items %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-2">
+                            {% if item.dish.image %}
+                            <img src="{{ item.dish.image }}" class="img-fluid rounded" alt="{{ item.dish.name }}">
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <h5>{{ item.dish.name }}</h5>
+                            <p class="text-muted mb-0">{{ item.dish.description[:100] }}...</p>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Quantity</label>
+                            <input type="number" class="form-control cart-quantity" 
+                                   data-dish-id="{{ item.dish_id }}" 
+                                   value="{{ item.quantity }}" min="1">
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <strong>${{ item.subtotal|round(2) }}</strong>
+                            <br>
+                            <button class="btn btn-sm btn-danger mt-2 remove-from-cart" 
+                                    data-dish-id="{{ item.dish_id }}">
+                                <i class="fas fa-trash"></i> Remove
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Order Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal:</span>
+                        <span>${{ total|round(2) }}</span>
+                    </div>
+                    {% if discount > 0 %}
+                    <div class="d-flex justify-content-between mb-2 text-success">
+                        <span>VIP Discount (5%):</span>
+                        <span>-${{ discount|round(2) }}</span>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    <div class="d-flex justify-content-between mb-3">
+                        <strong>Total:</strong>
+                        <strong>${{ (total - discount)|round(2) }}</strong>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="placeOrder()">
+                        <i class="fas fa-check"></i> Place Order
+                    </button>
+                    <a href="/menu" class="btn btn-outline-secondary w-100 mt-2">
+                        <i class="fas fa-arrow-left"></i> Continue Shopping
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-shopping-cart fa-4x text-muted mb-3"></i>
+        <p class="text-muted">Your cart is empty. <a href="/menu">Browse menu</a> to add items!</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function placeOrder() {
+    const items = [];
+    {% for item in cart_items %}
+    items.push({
+        dish_id: '{{ item.dish_id }}',
+        quantity: {{ item.quantity }}
+    });
+    {% endfor %}
+    
+    $.ajax({
+        url: '/api/v1/order',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ items: items }),
+        success: function(response) {
+            if (response.success) {
+                alert('Order placed successfully!');
+                window.location.href = '/orders';
+            } else {
+                alert(response.message || 'Failed to place order');
+            }
+        },
+        error: function() {
+            alert('Error placing order');
+        }
+    });
+}
+</script>
+{% endblock %}

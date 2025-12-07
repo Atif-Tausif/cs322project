@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Order History - Smart Restaurant{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4"><i class="fas fa-receipt"></i> My Orders</h1>
+    
+    {% if orders %}
+    <div class="row">
+        {% for order in orders %}
+        <div class="col-md-12 mb-4" id="order-{{ order.id }}">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>Order #{{ order.id[:8] }}</strong>
+                        <span class="badge bg-{{ 'success' if order.status == 'delivered' else 'warning' }} ms-2">
+                            {{ order.status|title }}
+                        </span>
+                    </div>
+                    <div>
+                        <small class="text-muted">{{ order.created_at[:19] }}</small>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        {% for item in order.items %}
+                        <div class="col-md-6 mb-2">
+                            <div class="d-flex">
+                                {% if item.dish_image %}
+                                <img src="{{ item.dish_image }}" class="rounded me-2" style="width: 60px; height: 60px; object-fit: cover;">
+                                {% endif %}
+                                <div>
+                                    <strong>{{ item.dish_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        Qty: {{ item.quantity }} × ${{ item.price|round(2) }}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Total: ${{ order.total|round(2) }}</strong>
+                            {% if order.discount_applied > 0 %}
+                            <br><small class="text-success">Discount: -${{ order.discount_applied|round(2) }}</small>
+                            {% endif %}
+                        </div>
+                        
+                        {% if order.status == 'delivered' and not order.food_rating %}
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#ratingModal{{ order.id }}">
+                            <i class="fas fa-star"></i> Rate Order
+                        </button>
+                        {% elif order.food_rating %}
+                        <div>
+                            <small class="text-muted">Food: 
+                                {% for i in range(5) %}
+                                    {% if i < order.food_rating %}
+                                    <i class="fas fa-star text-warning"></i>
+                                    {% else %}
+                                    <i class="far fa-star text-warning"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            </small>
+                            {% if order.delivery_rating %}
+                            <br><small class="text-muted">Delivery: 
+                                {% for i in range(5) %}
+                                    {% if i < order.delivery_rating %}
+                                    <i class="fas fa-star text-warning"></i>
+                                    {% else %}
+                                    <i class="far fa-star text-warning"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            </small>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Rating Modal -->
+            {% if order.status == 'delivered' and not order.food_rating %}
+            <div class="modal fade" id="ratingModal{{ order.id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Rate Your Order</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="ratingForm{{ order.id }}">
+                                <input type="hidden" name="order_id" value="{{ order.id }}">
+                                <input type="hidden" name="dish_id" value="{{ order.items[0].dish_id }}">
+                                
+                                <div class="mb-3">
+                                    <label>Food Rating</label>
+                                    <div class="rating-input">
+                                        {% for i in range(1, 6) %}
+                                        <input type="radio" name="food_rating" value="{{ i }}" id="food{{ order.id }}_{{ i }}" required>
+                                        <label for="food{{ order.id }}_{{ i }}" class="star-label">
+                                            <i class="fas fa-star"></i>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                
+                                {% if order.delivery_person_id %}
+                                <div class="mb-3">
+                                    <label>Delivery Rating</label>
+                                    <div class="rating-input">
+                                        {% for i in range(1, 6) %}
+                                        <input type="radio" name="delivery_rating" value="{{ i }}" id="delivery{{ order.id }}_{{ i }}">
+                                        <label for="delivery{{ order.id }}_{{ i }}" class="star-label">
+                                            <i class="fas fa-star"></i>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                    <input type="hidden" name="delivery_person_id" value="{{ order.delivery_person_id }}">
+                                </div>
+                                {% endif %}
+                                
+                                <div class="mb-3">
+                                    <label for="comment{{ order.id }}">Comment (Optional)</label>
+                                    <textarea class="form-control" id="comment{{ order.id }}" name="comment" rows="3"></textarea>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="submitRating('{{ order.id }}')">Submit Rating</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-shopping-bag fa-4x text-muted mb-3"></i>
+        <p class="text-muted">No orders yet. <a href="/menu">Browse menu</a> to get started!</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function submitRating(orderId) {
+    const form = document.getElementById('ratingForm' + orderId);
+    const formData = new FormData(form);
+    
+    const data = {
+        order_id: formData.get('order_id'),
+        dish_id: formData.get('dish_id'),
+        food_rating: parseInt(formData.get('food_rating')),
+        comment: formData.get('comment') || ''
+    };
+    
+    if (formData.get('delivery_rating')) {
+        data.delivery_rating = parseInt(formData.get('delivery_rating'));
+        data.delivery_person_id = formData.get('delivery_person_id');
+    }
+    
+    $.ajax({
+        url: '/api/v1/rating',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(response) {
+            if (response.success) {
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to submit rating');
+            }
+        },
+        error: function() {
+            alert('Error submitting rating');
+        }
+    });
+}
+</script>
+
+<style>
+.rating-input {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+}
+.rating-input input[type="radio"] {
+    display: none;
+}
+.rating-input label {
+    cursor: pointer;
+    color: #ddd;
+    font-size: 1.5rem;
+    margin-right: 5px;
+}
+.rating-input input[type="radio"]:checked ~ label,
+.rating-input label:hover,
+.rating-input label:hover ~ label {
+    color: #ffc107;
+}
+</style>
+{% endblock %}

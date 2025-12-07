@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Smart Restaurant{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Hero Section -->
+    <div class="hero-section text-center py-5">
+        <h1 class="display-4">Welcome to Smart Restaurant</h1>
+        <p class="lead">AI-Powered Food Ordering & Delivery</p>
+        {% if not session.user %}
+        <div class="mt-4">
+            <a href="/register" class="btn btn-primary btn-lg me-2">
+                <i class="fas fa-user-plus"></i> Register Now
+            </a>
+            <a href="/menu" class="btn btn-outline-primary btn-lg">
+                <i class="fas fa-book-open"></i> Browse Menu
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Personalized Section for Logged-in Users -->
+    {% if session.user %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h4>
+                        <i class="fas fa-user-circle"></i> 
+                        Welcome back, {{ session.user.username }}!
+                        {% if session.user.role == 'vip' %}
+                        <span class="badge bg-warning text-dark">VIP Member</span>
+                        {% endif %}
+                    </h4>
+                    <p class="mb-2">
+                        Account Balance: <strong>${{ (session.user.balance or 0)|round(2) }}</strong>
+                    </p>
+                    {% if session.user.role == 'vip' %}
+                    <p class="text-success mb-0">
+                        <i class="fas fa-star"></i> You're enjoying 5% discount on all orders!
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Personalized Recommendations -->
+    <section class="mb-5">
+        <h2><i class="fas fa-magic"></i> Recommended For You</h2>
+        <p class="text-muted">Based on your order history and preferences</p>
+        <div class="row" id="recommendations">
+            <!-- Will be populated by JavaScript -->
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Your Most Ordered -->
+    <section class="mb-5">
+        <h2><i class="fas fa-heart"></i> Your Favorites</h2>
+        <div class="row" id="favorites">
+            <!-- Will be populated by JavaScript -->
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Featured Section for All Users -->
+    <section class="mb-5">
+        <h2><i class="fas fa-fire"></i> Most Popular Dishes</h2>
+        <div class="row" id="popular-dishes">
+            <!-- Dish cards will go here -->
+            {% for dish in popular_dishes|default([]) %}
+            <div class="col-md-4 mb-4">
+                <div class="card dish-card h-100">
+                    <img src="{{ dish.image|default('/static/images/default_dish.png') }}" class="card-img-top" alt="{{ dish.name }}">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ dish.name }}</h5>
+                        <p class="card-text text-muted">{{ (dish.description or '')[:100] }}{% if dish.description and dish.description|length > 100 %}...{% endif %}</p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="h5 mb-0">${{ dish.price }}</span>
+                            <div class="rating">
+                                {% for i in range(5) %}
+                                    {% if i < (dish.rating or 0)|round|int %}
+                                    <i class="fas fa-star text-warning"></i>
+                                    {% else %}
+                                    <i class="far fa-star text-warning"></i>
+                                    {% endif %}
+                                {% endfor %}
+                                <span class="text-muted ms-1">({{ dish.rating or 0 }})</span>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-user-chef"></i> Chef {{ dish.chef_name or 'Unknown' }}
+                            </small>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white">
+                        <a href="/dish/{{ dish.id }}" class="btn btn-primary w-100">
+                            <i class="fas fa-info-circle"></i> View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Top Rated Dishes -->
+    <section class="mb-5">
+        <h2><i class="fas fa-trophy"></i> Highest Rated</h2>
+        <div class="row" id="top-rated">
+            {% for dish in top_rated_dishes|default([]) %}
+            <div class="col-md-4 mb-4">
+                <div class="card dish-card h-100">
+                    <div class="position-relative">
+                        <img src="{{ dish.image|default('/static/images/default_dish.png') }}" class="card-img-top" alt="{{ dish.name }}">
+                        <span class="badge bg-warning position-absolute top-0 end-0 m-2">
+                            <i class="fas fa-star"></i> {{ dish.rating or 0 }}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">{{ dish.name }}</h5>
+                        <p class="card-text text-muted">{{ (dish.description or '')[:100] }}{% if dish.description and dish.description|length > 100 %}...{% endif %}</p>
+                        <span class="h5">${{ dish.price }}</span>
+                    </div>
+                    <div class="card-footer bg-white">
+                        <a href="/dish/{{ dish.id }}" class="btn btn-outline-primary w-100">
+                            View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Featured Chefs -->
+    <section class="mb-5">
+        <h2><i class="fas fa-chef-hat"></i> Our Star Chefs</h2>
+        <div class="row">
+            {% for chef in featured_chefs|default([]) %}
+            <div class="col-md-6 mb-4">
+                <div class="card chef-card">
+                    <div class="card-body d-flex align-items-center">
+                        <img src="{{ chef.image|default('/static/images/default_chef.png') }}" 
+                             class="rounded-circle chef-avatar me-3" 
+                             alt="{{ chef.name }}"
+                             width="100" height="100">
+                        <div>
+                            <h5 class="mb-1">{{ chef.name or 'Unknown Chef' }}</h5>
+                            <p class="text-muted mb-1">{{ chef.specialty or 'General Cuisine' }}</p>
+                            <div class="rating">
+                                {% for i in range(5) %}
+                                    {% if i < (chef.rating or 0)|round|int %}
+                                    <i class="fas fa-star text-warning"></i>
+                                    {% else %}
+                                    <i class="far fa-star text-warning"></i>
+                                    {% endif %}
+                                {% endfor %}
+                                <span class="text-muted ms-1">({{ chef.rating or 0 }})</span>
+                            </div>
+                            <small class="text-muted d-block mt-1">
+                                {{ chef.dishes_count or 0 }} dishes | {{ chef.orders_count or 0 }} orders completed
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Call to Action -->
+    {% if not session.user %}
+    <section class="text-center py-5 bg-light rounded">
+        <h2>Ready to Order?</h2>
+        <p class="lead">Join our community and enjoy AI-powered recommendations!</p>
+        <a href="/register" class="btn btn-primary btn-lg">
+            <i class="fas fa-user-plus"></i> Create an Account
+        </a>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if session.user %}
+<script>
+// Load personalized recommendations for logged-in users
+$(document).ready(function() {
+    // Load recommendations
+    $.get('/api/v1/recommendations')
+        .done(function(data) {
+            if (data.success) {
+                displayRecommendations(data.dishes);
+            }
+        })
+        .fail(function() {
+            $('#recommendations').html('<div class="col-12"><p class="text-muted">Unable to load recommendations.</p></div>');
+        });
+    
+    // Load favorites
+    $.get('/api/v1/favorites')
+        .done(function(data) {
+            if (data.success) {
+                displayFavorites(data.dishes);
+            }
+        })
+        .fail(function() {
+            $('#favorites').html('<div class="col-12"><p class="text-muted">Unable to load favorites.</p></div>');
+        });
+});
+
+function displayRecommendations(dishes) {
+    const container = $('#recommendations');
+    container.empty();
+    
+    if (!dishes || dishes.length === 0) {
+        container.html('<div class="col-12"><p class="text-muted">Order more dishes to get personalized recommendations!</p></div>');
+        return;
+    }
+    
+    dishes.forEach(dish => {
+        container.append(createDishCard(dish));
+    });
+}
+
+function displayFavorites(dishes) {
+    const container = $('#favorites');
+    container.empty();
+    
+    if (!dishes || dishes.length === 0) {
+        container.html('<div class="col-12"><p class="text-muted">No favorites yet. Start ordering!</p></div>');
+        return;
+    }
+    
+    dishes.forEach(dish => {
+        container.append(createDishCard(dish));
+    });
+}
+
+function createDishCard(dish) {
+    const description = dish.description || '';
+    const descPreview = description.length > 100 ? description.substring(0, 100) + '...' : description;
+    const rating = Math.round(dish.rating || 0);
+    const fullStars = Math.max(0, Math.min(5, rating));
+    const emptyStars = Math.max(0, 5 - fullStars);
+    
+    const fullStarsHtml = '<i class="fas fa-star text-warning"></i>'.repeat(fullStars);
+    const emptyStarsHtml = '<i class="far fa-star text-warning"></i>'.repeat(emptyStars);
+    const matchScoreHtml = dish.match_score ? `<small class="text-success"><i class="fas fa-check-circle"></i> ${dish.match_score}% match</small>` : '';
+    
+    return `
+        <div class="col-md-4 mb-4">
+            <div class="card dish-card h-100">
+                <img src="${dish.image || '/static/images/default_dish.png'}" class="card-img-top" alt="${dish.name || 'Dish'}">
+                <div class="card-body">
+                    <h5 class="card-title">${dish.name || 'Unnamed Dish'}</h5>
+                    <p class="card-text text-muted">${descPreview}</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="h5 mb-0">$${(dish.price || 0).toFixed(2)}</span>
+                        <div class="rating">
+                            ${fullStarsHtml}
+                            ${emptyStarsHtml}
+                        </div>
+                    </div>
+                    ${matchScoreHtml}
+                </div>
+                <div class="card-footer bg-white">
+                    <a href="/dish/${dish.id}" class="btn btn-primary w-100">Order Now</a>
+                </div>
+            </div>
+        </div>
+    `;
+}
+</script>
+{% endif %}
+{% endblock %}

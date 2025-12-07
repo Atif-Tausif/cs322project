@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Smart Restaurant{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4"><i class="fas fa-user-circle"></i> My Profile</h1>
+    
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <i class="fas fa-user fa-4x text-primary mb-3"></i>
+                    <h3>{{ user.username }}</h3>
+                    <p class="text-muted">{{ user.email or 'No email' }}</p>
+                    {% if user.role == 'vip' %}
+                    <span class="badge bg-warning text-dark">
+                        <i class="fas fa-crown"></i> VIP Member
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h5>Account Information</h5>
+                    <p><strong>Balance:</strong> ${{ user.balance|round(2) }}</p>
+                    <p><strong>Total Spent:</strong> ${{ user.total_spent|round(2) }}</p>
+                    <p><strong>Orders:</strong> {{ user.orders_count }}</p>
+                    {% if user.warnings > 0 %}
+                    <p class="text-danger">
+                        <strong>Warnings:</strong> {{ user.warnings }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            {% if user.role == 'vip' and flavor_analysis %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-pie"></i> Flavor Profile</h5>
+                </div>
+                <div class="card-body">
+                    {% if flavor_analysis.dominant_flavor %}
+                    <p><strong>Dominant Flavor:</strong> 
+                        <span class="badge bg-primary">{{ flavor_analysis.dominant_flavor|title }}</span>
+                    </p>
+                    {% endif %}
+                    <div class="mb-3">
+                        <strong>Profile Scores:</strong>
+                        <div class="mt-2">
+                            {% for flavor, score in flavor_analysis.profile.items() %}
+                            <div class="mb-2">
+                                <small>{{ flavor|title }}:</small>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar" role="progressbar" style="width: {{ (score / 10 * 100)|round }}%">
+                                        {{ score|round(1) }}/10
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-receipt"></i> Recent Orders</h5>
+                </div>
+                <div class="card-body">
+                    {% if orders %}
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Date</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in orders %}
+                                <tr>
+                                    <td><a href="/orders#order-{{ order.id }}">{{ order.id[:8] }}...</a></td>
+                                    <td>{{ order.created_at[:10] }}</td>
+                                    <td>${{ order.total|round(2) }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if order.status == 'delivered' else 'warning' }}">
+                                            {{ order.status|title }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">No orders yet. <a href="/menu">Browse menu</a> to get started!</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
