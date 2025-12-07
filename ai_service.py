@@ -38,29 +38,6 @@ def search_knowledge_base(query: str) -> Optional[Dict]:
     
     return None
 
-def call_ollama(prompt: str) -> Optional[str]:
-    """Call Ollama API"""
-    try:
-        url = f"{LLMConfig.OLLAMA_BASE_URL}/api/generate"
-        payload = {
-            "model": LLMConfig.OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False
-        }
-        
-        response = requests.post(
-            url,
-            json=payload,
-            timeout=LLMConfig.TIMEOUT
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            return result.get('response', '')
-        return None
-    except Exception as e:
-        print(f"Ollama error: {e}")
-        return None
 
 def call_huggingface(prompt: str) -> Optional[str]:
     """Call HuggingFace API"""
@@ -123,11 +100,9 @@ def get_ai_response(message: str, user_id: Optional[str] = None) -> Dict:
     
     prompt = f"{context}\n\nCustomer: {message}\nAssistant:"
     
-    # Try LLM
+    # Use HuggingFace LLM
     reply = None
-    if LLMConfig.PROVIDER == 'ollama':
-        reply = call_ollama(prompt)
-    elif LLMConfig.PROVIDER == 'huggingface' and LLMConfig.HUGGINGFACE_TOKEN:
+    if LLMConfig.PROVIDER == 'huggingface' and LLMConfig.HUGGINGFACE_TOKEN:
         reply = call_huggingface(prompt)
     
     if reply:

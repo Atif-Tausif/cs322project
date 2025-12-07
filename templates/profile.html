@@ -44,6 +44,30 @@
                     {% endif %}
                 </div>
             </div>
+            
+            <!-- Add Money Section -->
+            <div class="card mt-4">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="fas fa-wallet"></i> Add Money to Account</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Add funds to your account balance to place orders.</p>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">$</span>
+                        <input type="number" 
+                               class="form-control" 
+                               id="depositAmount"
+                               step="0.01" 
+                               min="0.01"
+                               placeholder="Enter amount"
+                               value="10.00">
+                        <button type="button" class="btn btn-primary" id="depositBtn">
+                            <i class="fas fa-plus-circle"></i> Add Money
+                        </button>
+                    </div>
+                    <div id="depositMessage"></div>
+                </div>
+            </div>
         </div>
         
         <div class="col-md-8">
@@ -197,5 +221,91 @@ function disputeComplaint(complaintId) {
         }
     });
 }
+
+// Handle deposit
+(function() {
+    function initDeposit() {
+        if (typeof jQuery === 'undefined') {
+            console.log('jQuery not loaded yet, retrying...');
+            setTimeout(initDeposit, 100);
+            return;
+        }
+        
+        jQuery(document).ready(function($) {
+            console.log('Profile page loaded, setting up deposit button');
+            
+            // Use event delegation or direct binding
+            $(document).on('click', '#depositBtn', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('Deposit button clicked');
+                const amount = parseFloat($('#depositAmount').val());
+                const messageDiv = $('#depositMessage');
+                const btn = $(this);
+                
+                if (isNaN(amount) || amount <= 0) {
+                    messageDiv.html('<div class="alert alert-danger">Please enter a valid amount greater than $0.</div>');
+                    return false;
+                }
+                
+                if (amount > 10000) {
+                    messageDiv.html('<div class="alert alert-warning">Maximum deposit amount is $10,000.</div>');
+                    return false;
+                }
+                
+                // Disable button during request
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processing...');
+                messageDiv.html('');
+                
+                console.log('Sending deposit request for amount:', amount);
+                
+                $.ajax({
+                    url: '/api/v1/deposit',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ amount: amount }),
+                    success: function(response) {
+                        console.log('Deposit response:', response);
+                        if (response.success) {
+                            messageDiv.html(`<div class="alert alert-success">${response.message}</div>`);
+                            $('#depositAmount').val('10.00');
+                            // Reload page after 1 second to show updated balance
+                            setTimeout(function() {
+                                location.reload();
+                            }, 1000);
+                        } else {
+                            messageDiv.html(`<div class="alert alert-danger">${response.message || 'Failed to add money'}</div>`);
+                            btn.prop('disabled', false).html('<i class="fas fa-plus-circle"></i> Add Money');
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Deposit error:', xhr);
+                        const errorMsg = xhr.responseJSON?.message || 'Error adding money. Please try again.';
+                        messageDiv.html(`<div class="alert alert-danger">${errorMsg}</div>`);
+                        btn.prop('disabled', false).html('<i class="fas fa-plus-circle"></i> Add Money');
+                    }
+                });
+                
+                return false;
+            });
+            
+            // Allow Enter key to trigger deposit
+            $(document).on('keypress', '#depositAmount', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    $('#depositBtn').click();
+                }
+            });
+        });
+    }
+    
+    // Start initialization
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDeposit);
+    } else {
+        initDeposit();
+    }
+})();
 </script>
 {% endblock %}

@@ -577,6 +577,37 @@ def api_cart_update():
     
     return jsonify({'success': False, 'message': 'Item not in cart'})
 
+@bp.route('/api/v1/deposit', methods=['POST'])
+@require_login
+@require_approved
+def api_deposit():
+    """Add money to user account"""
+    data = request.get_json()
+    amount = float(data.get('amount', 0))
+    
+    if amount <= 0:
+        return jsonify({'success': False, 'message': 'Amount must be greater than $0'})
+    
+    if amount > 10000:
+        return jsonify({'success': False, 'message': 'Maximum deposit amount is $10,000'})
+    
+    user_id = session.get('user_id')
+    user = get_user_by_id(user_id)
+    
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'})
+    
+    # Add to balance
+    old_balance = user.balance
+    user.balance += amount
+    save_user(user)
+    
+    return jsonify({
+        'success': True,
+        'message': f'Successfully added ${amount:.2f} to your account. New balance: ${user.balance:.2f}',
+        'balance': user.balance
+    })
+
 @bp.route('/api/v1/knowledge/rate', methods=['POST'])
 @require_login
 def api_rate_knowledge():

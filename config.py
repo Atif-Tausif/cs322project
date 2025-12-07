@@ -20,15 +20,11 @@ class FlaskConfig:
     
 # LLM Configuration
 class LLMConfig:
-    # Choose: 'ollama' or 'huggingface'
-    PROVIDER = os.environ.get('LLM_PROVIDER', 'ollama')
-    
-    # Ollama settings
-    OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
-    OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama2')
+    # Using HuggingFace only
+    PROVIDER = 'huggingface'
     
     # HuggingFace settings
-    HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN', '')
+    HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN', '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')
     HUGGINGFACE_MODEL = os.environ.get('HUGGINGFACE_MODEL', 'microsoft/DialoGPT-medium')
     HUGGINGFACE_API_URL = 'https://api-inference.huggingface.co/models'
     
