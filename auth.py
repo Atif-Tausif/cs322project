@@ -41,8 +41,10 @@ def get_current_user():
     
     user = get_user_by_id(session['user_id'])
     if user:
-        # Update session with latest user data
+        # Update session with latest user data (including role changes)
         session['user'] = user.to_dict()
+        session['role'] = user.role  # Update role in session
+        session.modified = True  # Mark session as modified
         return user
     return None
 

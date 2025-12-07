@@ -99,9 +99,19 @@
             <i class="fas fa-exclamation-triangle"></i>
             <strong>Warning!</strong> You have {{ session.user.warnings }} warning(s). 
             {% if session.user.role == 'vip' %}
-                {{ 2 - session.user.warnings }} more warning(s) will downgrade you to regular customer.
+                {% set max_warnings = 2 %}
+                {% if session.user.warnings >= max_warnings %}
+                    <strong>You have been downgraded to regular customer due to excessive warnings.</strong>
+                {% else %}
+                    {{ max_warnings - session.user.warnings }} more warning(s) will downgrade you to regular customer.
+                {% endif %}
             {% else %}
-                {{ 3 - session.user.warnings }} more warning(s) will result in account deregistration.
+                {% set max_warnings = 3 %}
+                {% if session.user.warnings >= max_warnings %}
+                    <strong>Your account has been deregistered due to excessive warnings.</strong>
+                {% else %}
+                    {{ max_warnings - session.user.warnings }} more warning(s) will result in account deregistration.
+                {% endif %}
             {% endif %}
             <a href="/profile#warnings" class="alert-link">View Details</a>
         </div>

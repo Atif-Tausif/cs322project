@@ -3,6 +3,7 @@ Business logic services
 """
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
+from flask import session
 from database import (
     get_user_by_id, save_user, get_all_users,
     get_dish_by_id, get_all_dishes, save_dish,
@@ -28,6 +29,13 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tup
     if customer.role in ['customer', 'vip'] and not customer.approved:
         return False, "Your account is pending approval", None
     
+    # Check for existing warnings that should trigger downgrade/deregistration
+    # This handles cases where warnings accumulated before the check was implemented
+    customer = check_customer_warnings(customer)
+    # Ensure we have the latest customer data
+    if not customer:
+        customer = get_user_by_id(customer_id)
+    
     # Calculate discount for VIP
     discount = calculate_discount(customer, cart_total)
     final_total = cart_total - discount
@@ -37,6 +45,15 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tup
         # Add warning
         customer.warnings += 1
         save_user(customer)
+        # Check if customer should be downgraded or deregistered
+        # This will reload the customer object if downgraded
+        customer = check_customer_warnings(customer)
+        # Ensure we have the latest customer data
+        if not customer:
+            customer = get_user_by_id(customer_id)
+        if customer and customer.role != 'vip':
+            # If downgraded, update the message
+            return False, f"Insufficient balance. You need ${final_total:.2f} but have ${customer.balance:.2f}. Warning added. You have been downgraded from VIP to regular customer.", None
         return False, f"Insufficient balance. You need ${final_total:.2f} but have ${customer.balance:.2f}. Warning added.", None
     
     # Check if customer has free delivery (VIP)
@@ -72,6 +89,13 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tup
     
     save_user(customer)
     save_order(order)
+    
+    # Update dish order counts
+    for item in items:
+        dish = get_dish_by_id(item.get('dish_id'))
+        if dish:
+            dish.orders_count += item.get('quantity', 1)
+            save_dish(dish)
     
     return True, "Order placed successfully", order
 
@@ -259,7 +283,7 @@ def resolve_complaint(complaint_id: str, manager_id: str, resolution: str) -> Tu
         if complainant:
             complainant.warnings += 1
             save_user(complainant)
-            check_customer_warnings(complainant)
+            complainant = check_customer_warnings(complainant)
         complaint.dispute_resolution = 'dismissed'
     elif resolution == 'upheld':
         complaint.dispute_resolution = 'upheld'
@@ -268,16 +292,18 @@ def resolve_complaint(complaint_id: str, manager_id: str, resolution: str) -> Tu
     return True, "Complaint resolved"
 
 def check_customer_warnings(customer):
-    """Check if customer should be deregistered"""
+    """Check if customer should be deregistered or downgraded"""
     if customer.role in ['customer', 'vip']:
         max_warnings = AppConfig.MAX_WARNINGS_BEFORE_DEREGISTRATION
         if customer.role == 'vip':
             max_warnings = AppConfig.MAX_WARNINGS_FOR_VIP_DOWNGRADE
         
         if customer.warnings >= max_warnings:
-            if customer.role == 'vip':
+            was_vip = customer.role == 'vip'
+            if was_vip:
                 customer.role = 'customer'
                 customer.warnings = 0  # Clear warnings on downgrade
+                customer.vip_since = None  # Clear VIP status
             else:
                 # Deregister customer and blacklist
                 customer.approved = False
@@ -285,7 +311,24 @@ def check_customer_warnings(customer):
                 customer.blacklisted = True
                 # Refund balance
                 # (In a real system, you'd process the refund)
+            
+            # Save the changes
             save_user(customer)
+            
+            # Reload customer to get updated data
+            customer = get_user_by_id(customer.id)
+            
+            # Update session if user is currently logged in
+            try:
+                if 'user_id' in session and session.get('user_id') == customer.id:
+                    session['user'] = customer.to_dict()
+                    session['role'] = customer.role
+                    session.modified = True
+            except RuntimeError:
+                # Session not available (e.g., outside request context)
+                pass
+    
+    return customer
 
 def submit_delivery_bid(order_id: str, delivery_person_id: str, bid_amount: float) -> Tuple[bool, str]:
     """

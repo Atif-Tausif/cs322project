@@ -26,7 +26,7 @@
                             <label class="form-label">Quantity</label>
                             <input type="number" class="form-control cart-quantity" 
                                    data-dish-id="{{ item.dish_id }}" 
-                                   value="{{ item.quantity }}" min="1">
+                                   value="{{ item.quantity }}" min="1" max="999">
                         </div>
                         <div class="col-md-2 text-end">
                             <strong>${{ item.subtotal|round(2) }}</strong>
@@ -82,32 +82,47 @@
 </div>
 
 <script>
-function placeOrder() {
-    const items = [];
-    {% for item in cart_items %}
-    items.push({
-        dish_id: '{{ item.dish_id }}',
-        quantity: {{ item.quantity }}
-    });
-    {% endfor %}
-    
-    $.ajax({
-        url: '/api/v1/order',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({ items: items }),
-        success: function(response) {
-            if (response.success) {
-                alert('Order placed successfully!');
-                window.location.href = '/orders';
-            } else {
-                alert(response.message || 'Failed to place order');
+// Override placeOrder function for cart page - ensure it runs after jQuery is loaded
+$(document).ready(function() {
+    // Override the global placeOrder function
+    window.placeOrder = function() {
+        // Read items from current DOM state instead of template variables
+        const items = [];
+        $('.cart-quantity').each(function() {
+            const dishId = $(this).data('dish-id');
+            const quantity = parseInt($(this).val()) || 1;
+            
+            if (dishId && quantity > 0) {
+                items.push({
+                    dish_id: dishId,
+                    quantity: quantity
+                });
             }
-        },
-        error: function() {
-            alert('Error placing order');
+        });
+        
+        if (items.length === 0) {
+            alert('Your cart is empty');
+            return;
         }
-    });
-}
+        
+        $.ajax({
+            url: '/api/v1/order',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ items: items }),
+            success: function(response) {
+                if (response.success) {
+                    alert('Order placed successfully!');
+                    window.location.href = '/orders';
+                } else {
+                    alert(response.message || 'Failed to place order');
+                }
+            },
+            error: function() {
+                alert('Error placing order');
+            }
+        });
+    };
+});
 </script>
 {% endblock %}

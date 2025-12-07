@@ -39,6 +39,69 @@
         </div>
     </div>
     
+    <!-- Orders Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-shopping-bag"></i> Orders for My Dishes</h5>
+        </div>
+        <div class="card-body">
+            {% if orders %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Items</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr>
+                            <td>{{ order.id[:8] }}...</td>
+                            <td>
+                                {% for item in order.items %}
+                                    {% if item.dish_name %}
+                                    <div>{{ item.dish_name }} (Qty: {{ item.quantity }})</div>
+                                    {% endif %}
+                                {% endfor %}
+                            </td>
+                            <td>${{ order.total|round(2) }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'warning' if order.status == 'pending' else 'info' if order.status == 'preparing' else 'success' if order.status == 'ready' else 'secondary' }}">
+                                    {{ order.status|title }}
+                                </span>
+                            </td>
+                            <td>{{ order.created_at[:19] }}</td>
+                            <td>
+                                {% if order.status == 'pending' %}
+                                <button class="btn btn-sm btn-primary" onclick="updateOrderStatus('{{ order.id }}', 'preparing')">
+                                    <i class="fas fa-play"></i> Start Preparing
+                                </button>
+                                {% elif order.status == 'preparing' %}
+                                <button class="btn btn-sm btn-success" onclick="updateOrderStatus('{{ order.id }}', 'ready')">
+                                    <i class="fas fa-check"></i> Mark Ready
+                                </button>
+                                {% elif order.status == 'ready' %}
+                                <span class="text-muted">Waiting for delivery</span>
+                                {% else %}
+                                <span class="text-muted">{{ order.status|title }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No orders yet for your dishes.</p>
+            {% endif %}
+        </div>
+    </div>
+    
     <div class="card">
         <div class="card-header">
             <h5>My Dishes</h5>
@@ -79,4 +142,33 @@
         </div>
     </div>
 </div>
+
+<script>
+function updateOrderStatus(orderId, newStatus) {
+    if (!confirm(`Update order status to ${newStatus}?`)) {
+        return;
+    }
+    
+    $.ajax({
+        url: '/api/v1/order/update-status',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            order_id: orderId,
+            status: newStatus
+        }),
+        success: function(response) {
+            if (response.success) {
+                alert(response.message);
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to update order status');
+            }
+        },
+        error: function() {
+            alert('Error updating order status');
+        }
+    });
+}
+</script>
 {% endblock %}

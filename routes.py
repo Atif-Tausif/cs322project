@@ -7,7 +7,7 @@ from auth import login_user, logout_user, get_current_user, require_login, requi
 from database import (
     get_all_dishes, get_dish_by_id, save_dish, get_all_users, get_user_by_id, save_user,
     get_orders_by_customer, get_order_by_id, get_all_orders, get_bids_by_order,
-    get_all_forum_posts, get_forum_post_by_id, save_forum_post, delete_user
+    get_all_forum_posts, get_forum_post_by_id, save_forum_post, delete_user, save_order
 )
 from services import (
     process_order, submit_rating, file_complaint, resolve_complaint, dispute_complaint,
@@ -142,13 +142,23 @@ def logout():
 def profile():
     """User profile page"""
     user = get_current_user()
+    
+    # Force reload from database to ensure we have the latest data
+    # This is important after role changes like VIP downgrade
+    user = get_user_by_id(user.id)
+    
+    # Update session with latest data
+    session['user'] = user.to_dict()
+    session['role'] = user.role
+    session.modified = True
+    
     orders = get_orders_by_customer(user.id)
     
     # Get complaints against this user
     from database import get_complaints_by_target
     my_complaints = get_complaints_by_target(user.id)
     
-    # Get flavor profile analysis for VIP
+    # Get flavor profile analysis for VIP (only if actually VIP)
     flavor_analysis = None
     if user.role == 'vip':
         flavor_analysis = get_flavor_profile_analysis(user.id)
@@ -164,7 +174,7 @@ def orders():
     user = get_current_user()
     orders = get_orders_by_customer(user.id)
     
-    # Add dish names to orders
+    # Add dish names and prices to orders
     dishes = {d.id: d for d in get_all_dishes()}
     for order in orders:
         for item in order.items:
@@ -172,6 +182,8 @@ def orders():
             if dish:
                 item['dish_name'] = dish.name
                 item['dish_image'] = dish.image
+                # Use stored price if available, otherwise get current price
+                item['price'] = item.get('price', dish.price)
     
     return render_template('orders.html', orders=orders)
 
@@ -182,23 +194,37 @@ def cart():
     """Shopping cart page"""
     cart_items = session.get('cart', [])
     
-    # Add dish details to cart items
+    # Add dish details to cart items and validate
     dishes = {d.id: d for d in get_all_dishes()}
     total = 0.0
+    valid_items = []
     
     for item in cart_items:
-        dish = dishes.get(item.get('dish_id'))
-        if dish:
+        dish_id = item.get('dish_id')
+        quantity = item.get('quantity', 1)
+        
+        # Validate item
+        if not dish_id or not isinstance(quantity, int) or quantity < 1 or quantity > 999:
+            continue
+            
+        dish = dishes.get(dish_id)
+        if dish and dish.available:
             item['dish'] = dish.to_dict()
-            item['subtotal'] = dish.price * item.get('quantity', 1)
+            item['subtotal'] = dish.price * quantity
             total += item['subtotal']
+            valid_items.append(item)
+    
+    # Update session with validated items
+    if len(valid_items) != len(cart_items):
+        session['cart'] = valid_items
+        session.modified = True
     
     user = get_current_user()
     discount = 0.0
     if user.role == 'vip':
         discount = total * (AppConfig.VIP_DISCOUNT_PERCENT / 100)
     
-    return render_template('cart.html', cart_items=cart_items, total=total, discount=discount)
+    return render_template('cart.html', cart_items=valid_items, total=total, discount=discount)
 
 @bp.route('/forum')
 def forum():
@@ -366,12 +392,14 @@ def api_order():
     if not items:
         return jsonify({'success': False, 'message': 'Cart is empty'})
     
-    # Calculate total
+    # Calculate total and add prices to items for historical record
     dishes = {d.id: d for d in get_all_dishes()}
     total = 0.0
     for item in items:
         dish = dishes.get(item.get('dish_id'))
         if dish:
+            # Store price at time of order for historical accuracy
+            item['price'] = dish.price
             total += dish.price * item.get('quantity', 1)
     
     user_id = session.get('user_id')
@@ -461,6 +489,10 @@ def api_cart_add():
     if not dish_id:
         return jsonify({'success': False, 'message': 'Dish ID required'})
     
+    # Validate quantity
+    if quantity < 1 or quantity > 999:
+        return jsonify({'success': False, 'message': 'Invalid quantity. Must be between 1 and 999.'})
+    
     dish = get_dish_by_id(dish_id)
     if not dish or not dish.available:
         return jsonify({'success': False, 'message': 'Dish not available'})
@@ -476,7 +508,10 @@ def api_cart_add():
     # Check if already in cart
     for item in cart:
         if item.get('dish_id') == dish_id:
-            item['quantity'] += quantity
+            new_quantity = item.get('quantity', 0) + quantity
+            if new_quantity > 999:
+                return jsonify({'success': False, 'message': 'Maximum quantity per item is 999.'})
+            item['quantity'] = new_quantity
             session['cart'] = cart
             session.modified = True
             return jsonify({'success': True, 'message': 'Cart updated', 'cart_count': len(cart)})
@@ -518,8 +553,8 @@ def api_cart_update():
     dish_id = data.get('dish_id')
     quantity = int(data.get('quantity', 1))
     
-    if not dish_id or quantity < 1:
-        return jsonify({'success': False, 'message': 'Invalid data'})
+    if not dish_id or quantity < 1 or quantity > 999:
+        return jsonify({'success': False, 'message': 'Invalid quantity. Must be between 1 and 999.'})
     
     cart = session.get('cart', [])
     for item in cart:
@@ -595,9 +630,17 @@ def manager_dashboard():
     complaints = get_all_complaints()
     pending_complaints = [c for c in complaints if c.status in ['pending', 'disputed']]
     
-    # Get pending orders
+    # Get all orders for manager view
     orders = get_all_orders()
     pending_orders = [o for o in orders if o.status in ['pending', 'preparing']]
+    
+    # Add dish names to orders
+    dishes = {d.id: d for d in get_all_dishes()}
+    for order in orders:
+        for item in order.items:
+            dish = dishes.get(item.get('dish_id'))
+            if dish:
+                item['dish_name'] = dish.name
     
     # Get orders ready for delivery with bids
     ready_orders = [o for o in orders if o.status == 'ready']
@@ -746,7 +789,34 @@ def chef_dashboard():
     user = get_current_user()
     dishes = [d for d in get_all_dishes() if d.chef_id == user.id]
     
-    return render_template('chef/dashboard.html', dishes=dishes, user=user)
+    # Get orders that contain dishes made by this chef
+    all_orders = get_all_orders()
+    my_dish_ids = {d.id for d in dishes}
+    chef_orders = []
+    
+    for order in all_orders:
+        # Check if order contains any of this chef's dishes
+        for item in order.items:
+            if item.get('dish_id') in my_dish_ids:
+                chef_orders.append(order)
+                break
+    
+    # Sort orders by status and creation date
+    chef_orders.sort(key=lambda x: (
+        ['pending', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled'].index(x.status) 
+        if x.status in ['pending', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled'] else 999,
+        x.created_at
+    ))
+    
+    # Add dish names to orders
+    dishes_dict = {d.id: d for d in get_all_dishes()}
+    for order in chef_orders:
+        for item in order.items:
+            dish = dishes_dict.get(item.get('dish_id'))
+            if dish:
+                item['dish_name'] = dish.name
+    
+    return render_template('chef/dashboard.html', dishes=dishes, user=user, orders=chef_orders)
 
 @bp.route('/chef/dish/add', methods=['GET', 'POST'])
 @require_login
@@ -840,3 +910,57 @@ def delivery_bid():
     success, message = submit_delivery_bid(order_id, user_id, bid_amount)
     
     return jsonify({'success': success, 'message': message})
+
+@bp.route('/api/v1/order/update-status', methods=['POST'])
+@require_login
+def api_update_order_status():
+    """Update order status (chef or manager)"""
+    data = request.get_json()
+    order_id = data.get('order_id')
+    new_status = data.get('status')
+    
+    if not order_id or not new_status:
+        return jsonify({'success': False, 'message': 'Missing order_id or status'})
+    
+    # Validate status
+    valid_statuses = ['pending', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled']
+    if new_status not in valid_statuses:
+        return jsonify({'success': False, 'message': 'Invalid status'})
+    
+    order = get_order_by_id(order_id)
+    if not order:
+        return jsonify({'success': False, 'message': 'Order not found'})
+    
+    user = get_current_user()
+    
+    # Check permissions
+    if user.role == 'chef':
+        # Chef can only update orders that contain their dishes
+        dishes = get_all_dishes()
+        my_dish_ids = {d.id for d in dishes if d.chef_id == user.id}
+        order_has_my_dishes = any(item.get('dish_id') in my_dish_ids for item in order.items)
+        
+        if not order_has_my_dishes:
+            return jsonify({'success': False, 'message': 'You can only update orders for your dishes'})
+        
+        # Chef can only update to: preparing, ready
+        if new_status not in ['preparing', 'ready']:
+            return jsonify({'success': False, 'message': 'Chefs can only update status to preparing or ready'})
+        
+        # Validate status transitions
+        if order.status == 'pending' and new_status not in ['preparing']:
+            return jsonify({'success': False, 'message': 'Can only change from pending to preparing'})
+        if order.status == 'preparing' and new_status not in ['ready']:
+            return jsonify({'success': False, 'message': 'Can only change from preparing to ready'})
+    
+    elif user.role == 'manager':
+        # Manager can update to any status
+        pass
+    else:
+        return jsonify({'success': False, 'message': 'Only chefs and managers can update order status'})
+    
+    # Update order status
+    order.status = new_status
+    save_order(order)
+    
+    return jsonify({'success': True, 'message': f'Order status updated to {new_status}'})
