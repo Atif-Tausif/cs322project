@@ -56,13 +56,20 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tup
             return False, f"Insufficient balance. You need ${final_total:.2f} but have ${customer.balance:.2f}. Warning added. You have been downgraded from VIP to regular customer.", None
         return False, f"Insufficient balance. You need ${final_total:.2f} but have ${customer.balance:.2f}. Warning added.", None
     
-    # Check if customer has free delivery (VIP)
+    # Award free delivery for VIP customers (1 free delivery per 3 orders)
     free_delivery = False
     if customer.role == 'vip':
         orders_needed = AppConfig.VIP_FREE_DELIVERY_RATIO
+        # Award free delivery on every 3rd order (orders 3, 6, 9, etc.)
         if customer.orders_count > 0 and (customer.orders_count + 1) % orders_needed == 0:
-            free_delivery = True
             customer.free_deliveries_earned += 1
+            # Note: free_delivery flag will be set when delivery bid is accepted if customer has available free deliveries
+    
+    # Check if customer has free deliveries available for this order (VIP)
+    has_free_delivery_available = False
+    if customer.role == 'vip':
+        available_free_deliveries = customer.free_deliveries_earned - customer.free_deliveries_used
+        has_free_delivery_available = available_free_deliveries > 0
     
     # Create order
     order = Order(
@@ -70,7 +77,7 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tup
         items=items,
         total=final_total,
         discount_applied=discount,
-        free_delivery=free_delivery
+        free_delivery=has_free_delivery_available  # Mark if free delivery is available
     )
     
     # Deduct balance
@@ -389,13 +396,47 @@ def accept_delivery_bid(order_id: str, bid_id: str, manager_id: str, memo: str =
     bid.status = 'accepted'
     save_delivery_bid(bid)
     
+    # Check if customer has free delivery available (VIP benefit)
+    customer = get_user_by_id(order.customer_id)
+    delivery_cost = bid.bid_amount
+    free_delivery_applied = False
+    
+    if customer and customer.role == 'vip' and order.free_delivery:
+        # Check if customer has available free deliveries
+        available_free_deliveries = customer.free_deliveries_earned - customer.free_deliveries_used
+        if available_free_deliveries > 0:
+            # Apply free delivery - customer doesn't pay delivery cost
+            delivery_cost = 0.0
+            customer.free_deliveries_used += 1
+            free_delivery_applied = True
+            save_user(customer)
+    
     # Assign to order
     order.delivery_person_id = bid.delivery_person_id
-    order.delivery_bid = bid.bid_amount
+    order.delivery_bid = bid.bid_amount  # Store original bid amount for record keeping
     order.status = 'delivering'
+    
+    # Update order total and customer balance only if delivery is not free
+    if not free_delivery_applied and delivery_cost > 0:
+        # Add delivery cost to order total
+        order.total += delivery_cost
+        # Deduct delivery cost from customer balance
+        if customer:
+            if customer.balance < delivery_cost:
+                # Insufficient balance for delivery - this shouldn't happen as order was already placed
+                # But handle it gracefully
+                return False, f"Insufficient balance for delivery cost (${delivery_cost:.2f})"
+            customer.balance -= delivery_cost
+            customer.total_spent += delivery_cost
+            save_user(customer)
+    
     save_order(order)
     
-    return True, "Bid accepted"
+    message = "Bid accepted"
+    if free_delivery_applied:
+        message += f". Free delivery applied! (Saved ${bid.bid_amount:.2f})"
+    
+    return True, message
 
 def get_popular_dishes(limit: int = 6) -> List[Dict]:
     """Get most popular dishes"""

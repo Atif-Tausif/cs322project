@@ -58,11 +58,26 @@
                         <span>-${{ discount|round(2) }}</span>
                     </div>
                     {% endif %}
+                    {% if session.user and session.user.role == 'vip' %}
+                    {% set available_free = (session.user.free_deliveries_earned or 0) - (session.user.free_deliveries_used or 0) %}
+                    {% if available_free > 0 %}
+                    <div class="d-flex justify-content-between mb-2 text-info">
+                        <span><i class="fas fa-gift"></i> Free Delivery Available:</span>
+                        <span>{{ available_free }} credit(s)</span>
+                    </div>
+                    <small class="text-muted d-block mb-2">
+                        <i class="fas fa-info-circle"></i> Free delivery will be applied when your order is assigned for delivery
+                    </small>
+                    {% endif %}
+                    {% endif %}
                     <hr>
                     <div class="d-flex justify-content-between mb-3">
                         <strong>Total:</strong>
                         <strong>${{ (total - discount)|round(2) }}</strong>
                     </div>
+                    <small class="text-muted d-block mb-2">
+                        <i class="fas fa-info-circle"></i> Delivery cost will be added when assigned (free for VIP with available credits)
+                    </small>
                     <button class="btn btn-primary w-100" onclick="placeOrder()">
                         <i class="fas fa-check"></i> Place Order
                     </button>

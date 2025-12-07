@@ -964,3 +964,48 @@ def api_update_order_status():
     save_order(order)
     
     return jsonify({'success': True, 'message': f'Order status updated to {new_status}'})
+
+# ============================================================================
+# Developer/Testing Routes
+# ============================================================================
+
+@bp.route('/dev/balance')
+@require_login
+@require_role('manager')
+def dev_balance_management():
+    """Developer page for managing customer balances (testing only)"""
+    users = get_all_users()
+    # Sort by role, then username
+    users.sort(key=lambda x: (x.role != 'customer' and x.role != 'vip', x.username))
+    return render_template('dev/balance.html', users=users)
+
+@bp.route('/api/v1/dev/balance/update', methods=['POST'])
+@require_login
+@require_role('manager')
+def api_update_balance():
+    """Update user balance (developer/testing only)"""
+    data = request.get_json()
+    user_id = data.get('user_id')
+    new_balance = float(data.get('balance', 0))
+    
+    if not user_id:
+        return jsonify({'success': False, 'message': 'User ID required'})
+    
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'})
+    
+    # Update balance
+    old_balance = user.balance
+    user.balance = new_balance
+    save_user(user)
+    
+    return jsonify({
+        'success': True, 
+        'message': f'Balance updated from ${old_balance:.2f} to ${new_balance:.2f}',
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'balance': user.balance
+        }
+    })

@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Balance Management - Developer Tools{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>Developer/Testing Tool:</strong> This page is for managing customer balances during development and testing.
+    </div>
+    
+    <h1 class="mb-4"><i class="fas fa-dollar-sign"></i> Balance Management</h1>
+    
+    <div class="card">
+        <div class="card-header">
+            <h5>All Users</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="balanceTable">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Email</th>
+                            <th>Current Balance</th>
+                            <th>Total Spent</th>
+                            <th>Orders</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr data-user-id="{{ user.id }}">
+                            <td>
+                                <strong>{{ user.username }}</strong>
+                                {% if user.role == 'vip' %}
+                                <span class="badge bg-warning text-dark">VIP</span>
+                                {% elif user.role == 'manager' %}
+                                <span class="badge bg-danger">Manager</span>
+                                {% elif user.role == 'chef' %}
+                                <span class="badge bg-info">Chef</span>
+                                {% elif user.role == 'delivery' %}
+                                <span class="badge bg-secondary">Delivery</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.role|title }}</td>
+                            <td>{{ user.email or 'N/A' }}</td>
+                            <td>
+                                <span class="current-balance">${{ user.balance|round(2) }}</span>
+                            </td>
+                            <td>${{ user.total_spent|round(2) }}</td>
+                            <td>{{ user.orders_count }}</td>
+                            <td>
+                                <div class="input-group" style="width: 200px;">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" 
+                                           class="form-control balance-input" 
+                                           step="0.01" 
+                                           min="0"
+                                           value="{{ user.balance|round(2) }}"
+                                           data-user-id="{{ user.id }}"
+                                           data-username="{{ user.username }}">
+                                    <button class="btn btn-primary update-balance-btn" 
+                                            data-user-id="{{ user.id }}"
+                                            data-username="{{ user.username }}">
+                                        <i class="fas fa-save"></i> Update
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Handle update balance button clicks
+    $('.update-balance-btn').on('click', function() {
+        const userId = $(this).data('user-id');
+        const username = $(this).data('username');
+        const input = $(this).closest('.input-group').find('.balance-input');
+        const newBalance = parseFloat(input.val());
+        
+        if (isNaN(newBalance) || newBalance < 0) {
+            alert('Please enter a valid balance amount (0 or greater)');
+            return;
+        }
+        
+        if (!confirm(`Update balance for ${username} to $${newBalance.toFixed(2)}?`)) {
+            return;
+        }
+        
+        $.ajax({
+            url: '/api/v1/dev/balance/update',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                user_id: userId,
+                balance: newBalance
+            }),
+            success: function(response) {
+                if (response.success) {
+                    // Update the displayed balance
+                    const row = $(`tr[data-user-id="${userId}"]`);
+                    row.find('.current-balance').text('$' + response.user.balance.toFixed(2));
+                    input.val(response.user.balance.toFixed(2));
+                    
+                    // Show success message
+                    showNotification(response.message, 'success');
+                } else {
+                    alert(response.message || 'Failed to update balance');
+                }
+            },
+            error: function() {
+                alert('Error updating balance');
+            }
+        });
+    });
+    
+    // Allow Enter key to trigger update
+    $('.balance-input').on('keypress', function(e) {
+        if (e.which === 13) {
+            $(this).closest('.input-group').find('.update-balance-btn').click();
+        }
+    });
+    
+    function showNotification(message, type = 'info') {
+        const toast = $(`
+            <div class="toast align-items-center text-white bg-${type} border-0" role="alert" style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
+                <div class="d-flex">
+                    <div class="toast-body">${message}</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>
+        `);
+        
+        $('body').append(toast);
+        const bsToast = new bootstrap.Toast(toast[0]);
+        bsToast.show();
+        
+        toast.on('hidden.bs.toast', function() {
+            $(this).remove();
+        });
+    }
+});
+</script>
+{% endblock %}
+

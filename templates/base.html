@@ -73,6 +73,15 @@
                                 <li><a class="dropdown-item" href="/{{ session.user.role }}/dashboard">
                                     <i class="fas fa-tachometer-alt"></i> Dashboard
                                 </a></li>
+                                {% endif %}
+                                
+                                {% if session.user.role == 'manager' %}
+                                <li><a class="dropdown-item" href="/dev/balance">
+                                    <i class="fas fa-dollar-sign"></i> Balance Management
+                                </a></li>
+                                {% endif %}
+                                
+                                {% if session.user.role in ['manager', 'chef', 'delivery'] %}
                                 <li><hr class="dropdown-divider"></li>
                                 {% endif %}
                                 

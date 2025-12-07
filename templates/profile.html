@@ -27,6 +27,16 @@
                     <p><strong>Balance:</strong> ${{ user.balance|round(2) }}</p>
                     <p><strong>Total Spent:</strong> ${{ user.total_spent|round(2) }}</p>
                     <p><strong>Orders:</strong> {{ user.orders_count }}</p>
+                    {% if user.role == 'vip' %}
+                    <p class="text-success">
+                        <strong>Free Deliveries:</strong> 
+                        {{ (user.free_deliveries_earned or 0) - (user.free_deliveries_used or 0) }} available
+                        ({{ user.free_deliveries_earned or 0 }} earned, {{ user.free_deliveries_used or 0 }} used)
+                    </p>
+                    <p class="text-muted small">
+                        <i class="fas fa-info-circle"></i> Earn 1 free delivery for every 3 orders
+                    </p>
+                    {% endif %}
                     {% if user.warnings > 0 %}
                     <p class="text-danger">
                         <strong>Warnings:</strong> {{ user.warnings }}
