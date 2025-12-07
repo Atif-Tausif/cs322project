@@ -45,6 +45,29 @@
                             </small>
                         </div>
                     </div>
+                    {% if post.replies %}
+                    <div class="mt-3 border-top pt-3">
+                        <h6>Replies:</h6>
+                        {% for reply in post.replies %}
+                        <div class="mb-2 p-2 bg-light rounded">
+                            <small><strong>{{ reply.author_name or 'Unknown' }}</strong> - {{ reply.created_at[:19] }}</small>
+                            <p class="mb-0">{{ reply.content }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if session.user and session.user.role in ['customer', 'vip'] %}
+                    <div class="mt-3">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showReplyForm('{{ post.id }}')">
+                            <i class="fas fa-reply"></i> Reply
+                        </button>
+                        <div id="replyForm{{ post.id }}" style="display: none;" class="mt-2">
+                            <textarea class="form-control mb-2" id="replyContent{{ post.id }}" rows="2" placeholder="Write your reply..."></textarea>
+                            <button class="btn btn-sm btn-primary" onclick="submitReply('{{ post.id }}')">Submit</button>
+                            <button class="btn btn-sm btn-secondary" onclick="hideReplyForm('{{ post.id }}')">Cancel</button>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -100,8 +123,30 @@
 <script>
 $('#newPostForm').on('submit', function(e) {
     e.preventDefault();
-    // Forum posting would be implemented via API endpoint
-    alert('Forum posting feature coming soon!');
+    
+    $.ajax({
+        url: '/api/v1/forum/post',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            title: $('#postTitle').val(),
+            content: $('#postContent').val(),
+            category: $('#postCategory').val()
+        }),
+        success: function(response) {
+            if (response.success) {
+                alert(response.message);
+                $('#newPostModal').modal('hide');
+                $('#newPostForm')[0].reset();
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to create post');
+            }
+        },
+        error: function() {
+            alert('Error creating post');
+        }
+    });
 });
 </script>
 {% endif %}
@@ -171,6 +216,43 @@ $('#knowledgeForm').on('submit', function(e) {
         }
     });
 });
+
+function showReplyForm(postId) {
+    document.getElementById('replyForm' + postId).style.display = 'block';
+}
+
+function hideReplyForm(postId) {
+    document.getElementById('replyForm' + postId).style.display = 'none';
+    document.getElementById('replyContent' + postId).value = '';
+}
+
+function submitReply(postId) {
+    const content = document.getElementById('replyContent' + postId).value.trim();
+    if (!content) {
+        alert('Please enter a reply');
+        return;
+    }
+    
+    $.ajax({
+        url: '/api/v1/forum/reply',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            post_id: postId,
+            content: content
+        }),
+        success: function(response) {
+            if (response.success) {
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to post reply');
+            }
+        },
+        error: function() {
+            alert('Error posting reply');
+        }
+    });
+}
 </script>
 {% endif %}
 {% endblock %}

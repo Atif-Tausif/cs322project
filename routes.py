@@ -1,6 +1,7 @@
 """
 Flask routes and endpoints
 """
+from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, send_from_directory
 from werkzeug.utils import secure_filename
 from auth import login_user, logout_user, get_current_user, require_login, require_role, require_approved
@@ -103,9 +104,9 @@ def register():
             flash('Username already exists', 'danger')
             return render_template('register.html')
         
-        # Check if user is blacklisted
+        # Check if user is blacklisted (by username or email)
         all_users = get_all_users()
-        blacklisted_user = next((u for u in all_users if u.username == username and u.blacklisted), None)
+        blacklisted_user = next((u for u in all_users if (u.username == username or u.email == email) and u.blacklisted), None)
         if blacklisted_user:
             flash('This account has been blacklisted and cannot register again', 'danger')
             return render_template('register.html')
@@ -236,6 +237,9 @@ def forum():
     users = {u.id: u.username for u in get_all_users()}
     for post in posts:
         post.author_name = users.get(post.author_id, 'Unknown')
+        # Add author names to replies
+        for reply in post.replies:
+            reply['author_name'] = users.get(reply.get('author_id'), 'Unknown')
     
     return render_template('forum.html', posts=posts)
 
@@ -453,9 +457,16 @@ def api_complaint():
     user_id = session.get('user_id')
     user = get_current_user()
     
+    if not user:
+        return jsonify({'success': False, 'message': 'User not logged in'})
+    
     # Delivery personnel can only complain about customers
     if user.role == 'delivery' and target_type != 'customer':
         return jsonify({'success': False, 'message': 'Delivery personnel can only file complaints about customers'})
+    
+    # Customers can file complaints about chefs, delivery people, or other customers
+    if user.role in ['customer', 'vip'] and target_type not in ['chef', 'delivery', 'customer']:
+        return jsonify({'success': False, 'message': 'Invalid target type for customers'})
     
     success, message = file_complaint(user_id, target_id, target_type, complaint_type, description)
     
@@ -612,6 +623,77 @@ def api_submit_knowledge():
     
     return jsonify({'success': True, 'message': 'Knowledge entry submitted. Pending manager approval.'})
 
+@bp.route('/api/v1/forum/post', methods=['POST'])
+@require_login
+@require_approved
+def api_forum_post():
+    """Create a new forum post"""
+    data = request.get_json()
+    title = data.get('title', '').strip()
+    content = data.get('content', '').strip()
+    category = data.get('category', 'general')
+    
+    if not title or not content:
+        return jsonify({'success': False, 'message': 'Title and content are required'})
+    
+    if category not in ['chefs', 'dishes', 'delivery', 'general']:
+        return jsonify({'success': False, 'message': 'Invalid category'})
+    
+    user_id = session.get('user_id')
+    user = get_current_user()
+    
+    # Only registered customers and VIPs can post
+    if user.role not in ['customer', 'vip']:
+        return jsonify({'success': False, 'message': 'Only registered customers can create posts'})
+    
+    post = ForumPost(
+        author_id=user_id,
+        title=title,
+        content=content,
+        category=category
+    )
+    
+    save_forum_post(post)
+    
+    return jsonify({'success': True, 'message': 'Post created successfully', 'post_id': post.id})
+
+@bp.route('/api/v1/forum/reply', methods=['POST'])
+@require_login
+@require_approved
+def api_forum_reply():
+    """Reply to a forum post"""
+    data = request.get_json()
+    post_id = data.get('post_id')
+    content = data.get('content', '').strip()
+    
+    if not post_id or not content:
+        return jsonify({'success': False, 'message': 'Post ID and content are required'})
+    
+    post = get_forum_post_by_id(post_id)
+    if not post:
+        return jsonify({'success': False, 'message': 'Post not found'})
+    
+    user_id = session.get('user_id')
+    user = get_current_user()
+    
+    # Only registered customers and VIPs can reply
+    if user.role not in ['customer', 'vip']:
+        return jsonify({'success': False, 'message': 'Only registered customers can reply'})
+    
+    # Add reply
+    reply = {
+        'id': f"reply_{datetime.now().timestamp()}",
+        'author_id': user_id,
+        'author_name': user.username,
+        'content': content,
+        'created_at': datetime.now().isoformat()
+    }
+    
+    post.replies.append(reply)
+    save_forum_post(post)
+    
+    return jsonify({'success': True, 'message': 'Reply posted successfully'})
+
 # ============================================================================
 # Manager Routes
 # ============================================================================
@@ -630,6 +712,13 @@ def manager_dashboard():
     complaints = get_all_complaints()
     pending_complaints = [c for c in complaints if c.status in ['pending', 'disputed']]
     
+    # Add complainant and target names to complaints
+    for complaint in pending_complaints:
+        complainant = get_user_by_id(complaint.complainant_id)
+        target = get_user_by_id(complaint.target_id)
+        complaint.complainant_name = complainant.username if complainant else 'Unknown'
+        complaint.target_name = target.username if target else 'Unknown'
+    
     # Get all orders for manager view
     orders = get_all_orders()
     pending_orders = [o for o in orders if o.status in ['pending', 'preparing']]
@@ -643,11 +732,14 @@ def manager_dashboard():
                 item['dish_name'] = dish.name
     
     # Get orders ready for delivery with bids
-    ready_orders = [o for o in orders if o.status == 'ready']
+    ready_orders = [o for o in orders if o.status == 'ready' and not o.delivery_person_id]
     orders_with_bids = []
-    from database import get_bids_by_order
+    from database import get_bids_by_order, get_all_delivery_bids
+    all_bids = get_all_delivery_bids()
+    
     for order in ready_orders:
-        bids = get_bids_by_order(order.id)
+        # Get all pending bids for this order
+        bids = [b for b in all_bids if b.order_id == order.id and b.status == 'pending']
         if bids:
             # Add delivery person names to bids
             for bid in bids:
@@ -658,6 +750,9 @@ def manager_dashboard():
                 'bids': sorted(bids, key=lambda b: b.bid_amount)
             })
     
+    # Also show orders that are ready but have no bids yet
+    orders_without_bids = [o for o in ready_orders if not any(b.order_id == o.id for b in all_bids if b.status == 'pending')]
+    
     # Get flagged knowledge base entries
     from database import get_flagged_knowledge_entries
     flagged_kb = get_flagged_knowledge_entries()
@@ -667,13 +762,18 @@ def manager_dashboard():
     kb_entries = get_knowledge_base()
     pending_kb = [e for e in kb_entries if e.get('author_id') and not e.get('approved', False)]
     
+    # Get all employees for HR management
+    employees = [u for u in users if u.role in ['chef', 'delivery']]
+    
     return render_template('manager/dashboard.html',
                          pending_users=pending_users,
                          pending_complaints=pending_complaints,
                          pending_orders=pending_orders,
                          orders_with_bids=orders_with_bids,
+                         orders_without_bids=orders_without_bids if 'orders_without_bids' in locals() else [],
                          flagged_kb=flagged_kb,
-                         pending_kb=pending_kb)
+                         pending_kb=pending_kb,
+                         employees=employees)
 
 @bp.route('/manager/approve/<user_id>', methods=['POST'])
 @require_login
@@ -776,6 +876,124 @@ def manager_accept_bid():
         flash(message, 'danger')
     
     return redirect(url_for('main.manager_dashboard'))
+
+@bp.route('/manager/hr/update', methods=['POST'])
+@require_login
+@require_role('manager')
+def manager_hr_update():
+    """Update employee salary or status (hire/fire/raise/cut pay)"""
+    data = request.get_json()
+    employee_id = data.get('employee_id')
+    action = data.get('action')  # 'hire', 'fire', 'raise', 'cut', 'set_salary'
+    amount = data.get('amount', 0.0)  # For raise/cut/set_salary
+    
+    if not employee_id or not action:
+        return jsonify({'success': False, 'message': 'Missing required fields'})
+    
+    employee = get_user_by_id(employee_id)
+    if not employee:
+        return jsonify({'success': False, 'message': 'Employee not found'})
+    
+    if employee.role not in ['chef', 'delivery']:
+        return jsonify({'success': False, 'message': 'User is not an employee'})
+    
+    if action == 'fire':
+        # Fire employee
+        employee.role = 'customer'
+        employee.approved = False
+        employee.salary = 0.0
+        save_user(employee)
+        return jsonify({'success': True, 'message': f'Employee {employee.username} has been fired'})
+    
+    elif action == 'hire':
+        # Hire employee - can hire anyone who is not currently an active employee
+        # Check if they're already an active employee
+        if employee.role in ['chef', 'delivery'] and employee.approved:
+            return jsonify({'success': False, 'message': 'Employee is already active'})
+        
+        # Get the role to assign
+        new_role = data.get('role', employee.role if employee.role in ['chef', 'delivery'] else 'chef')
+        if new_role not in ['chef', 'delivery']:
+            new_role = 'chef'  # Default to chef
+        
+        # Check if we already have 2 of this role
+        all_users = get_all_users()
+        active_count = len([u for u in all_users if u.role == new_role and u.approved and u.id != employee.id])
+        if active_count >= 2:
+            return jsonify({'success': False, 'message': f'Already have 2 active {new_role}s. Fire one first or hire as {("delivery" if new_role == "chef" else "chef")}.'})
+        
+        # Hire the employee
+        employee.role = new_role
+        employee.approved = True
+        if employee.salary == 0:
+            # Set default salary
+            employee.salary = 5000.0 if new_role == 'chef' else 3000.0
+        save_user(employee)
+        return jsonify({'success': True, 'message': f'Employee {employee.username} has been hired as {new_role}'})
+    
+    elif action == 'raise':
+        # Raise salary by percentage or amount
+        if amount > 0:
+            if amount <= 1:  # Treat as percentage (0.1 = 10%)
+                employee.salary = employee.salary * (1 + amount)
+            else:  # Treat as absolute amount
+                employee.salary += amount
+            save_user(employee)
+            return jsonify({'success': True, 'message': f'Salary raised. New salary: ${employee.salary:.2f}'})
+    
+    elif action == 'cut':
+        # Cut salary by percentage or amount
+        if amount > 0:
+            if amount <= 1:  # Treat as percentage (0.1 = 10%)
+                employee.salary = max(0, employee.salary * (1 - amount))
+            else:  # Treat as absolute amount
+                employee.salary = max(0, employee.salary - amount)
+            save_user(employee)
+            return jsonify({'success': True, 'message': f'Salary cut. New salary: ${employee.salary:.2f}'})
+    
+    elif action == 'set_salary':
+        # Set absolute salary
+        if amount >= 0:
+            employee.salary = amount
+            save_user(employee)
+            return jsonify({'success': True, 'message': f'Salary set to ${employee.salary:.2f}'})
+    
+    return jsonify({'success': False, 'message': 'Invalid action'})
+
+@bp.route('/manager/account/close', methods=['POST'])
+@require_login
+@require_role('manager')
+def manager_close_account():
+    """Close customer account (when kicked out or quits)"""
+    data = request.get_json()
+    user_id = data.get('user_id')
+    
+    if not user_id:
+        return jsonify({'success': False, 'message': 'User ID required'})
+    
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'})
+    
+    if user.role not in ['customer', 'vip', 'visitor']:
+        return jsonify({'success': False, 'message': 'Can only close customer accounts'})
+    
+    # Clear deposit (refund balance)
+    refund_amount = user.balance
+    user.balance = 0.0
+    
+    # Close account
+    user.approved = False
+    user.role = 'visitor'
+    
+    # Always blacklist when account is closed (kicked out or quit)
+    user.blacklisted = True
+    
+    save_user(user)
+    
+    message = f'Account closed. Refunded ${refund_amount:.2f}. User has been blacklisted and cannot register again.'
+    
+    return jsonify({'success': True, 'message': message})
 
 # ============================================================================
 # Chef Routes

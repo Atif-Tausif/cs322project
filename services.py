@@ -178,12 +178,20 @@ def file_complaint(complainant_id: str, target_id: str, target_type: str,
     """
     File a complaint or compliment
     Can be filed by customers or delivery personnel
+    target_id can be a user ID or username
     """
     complainant = get_user_by_id(complainant_id)
-    target = get_user_by_id(target_id)
+    if not complainant:
+        return False, "Complainant not found"
     
-    if not complainant or not target:
-        return False, "User not found"
+    # Try to get target by ID first, then by username
+    target = get_user_by_id(target_id)
+    if not target:
+        from database import get_user_by_username
+        target = get_user_by_username(target_id)
+    
+    if not target:
+        return False, "Target user not found"
     
     # Allow delivery personnel to complain/compliment customers they delivered to
     if complainant.role == 'delivery' and target_type != 'customer':
@@ -214,6 +222,11 @@ def file_complaint(complainant_id: str, target_id: str, target_type: str,
     
     save_user(target)
     save_user(complainant)
+    
+    # Compliments cancel out complaints (1:1 ratio)
+    if complaint_type == 'compliment' and target.complaints_count > 0:
+        # One compliment cancels one complaint
+        target.complaints_count = max(0, target.complaints_count - weight)
     
     # Check for demotion/promotion
     check_employee_performance(target)
@@ -273,6 +286,8 @@ def dispute_complaint(complaint_id: str, user_id: str) -> Tuple[bool, str]:
 def resolve_complaint(complaint_id: str, manager_id: str, resolution: str) -> Tuple[bool, str]:
     """
     Resolve a complaint (manager only)
+    If upheld: target gets warning (if complaint) or benefit (if compliment)
+    If dismissed: complainant gets warning for false complaint
     """
     complaints = get_all_complaints()
     complaint = next((c for c in complaints if c.id == complaint_id), None)
@@ -292,8 +307,33 @@ def resolve_complaint(complaint_id: str, manager_id: str, resolution: str) -> Tu
             save_user(complainant)
             complainant = check_customer_warnings(complainant)
         complaint.dispute_resolution = 'dismissed'
+        
+        # Remove the complaint/compliment from target's count since it was false
+        target = get_user_by_id(complaint.target_id)
+        if target:
+            if complaint.complaint_type == 'complaint':
+                # Remove complaint count (VIP complaints count twice)
+                complainant_weight = 2 if complainant and complainant.role == 'vip' else 1
+                target.complaints_count = max(0, target.complaints_count - complainant_weight)
+            else:  # compliment
+                complainant_weight = 2 if complainant and complainant.role == 'vip' else 1
+                target.compliments = max(0, target.compliments - complainant_weight)
+            save_user(target)
+            check_employee_performance(target)  # Recheck performance after removal
+        
     elif resolution == 'upheld':
         complaint.dispute_resolution = 'upheld'
+        
+        # If complaint is upheld, target gets warning (only for complaints, not compliments)
+        if complaint.complaint_type == 'complaint':
+            target = get_user_by_id(complaint.target_id)
+            if target:
+                # Only add warning if target is a customer/VIP
+                if target.role in ['customer', 'vip']:
+                    target.warnings += 1
+                    save_user(target)
+                    check_customer_warnings(target)
+                # For employees, complaints already affect performance via check_employee_performance
     
     save_complaint(complaint)
     return True, "Complaint resolved"
@@ -351,6 +391,16 @@ def submit_delivery_bid(order_id: str, delivery_person_id: str, bid_amount: floa
     # Check if already has a delivery person
     if order.delivery_person_id:
         return False, "Order already has a delivery person assigned"
+    
+    # Check if delivery person already bid on this order
+    from database import get_all_delivery_bids
+    existing_bids = get_all_delivery_bids()
+    existing_bid = next((b for b in existing_bids if b.order_id == order_id and b.delivery_person_id == delivery_person_id and b.status == 'pending'), None)
+    if existing_bid:
+        # Update existing bid
+        existing_bid.bid_amount = bid_amount
+        save_delivery_bid(existing_bid)
+        return True, "Bid updated successfully"
     
     bid = DeliveryBid(
         order_id=order_id,
