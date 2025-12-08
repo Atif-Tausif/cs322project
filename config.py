@@ -20,13 +20,19 @@ class FlaskConfig:
     
 # LLM Configuration
 class LLMConfig:
-    # Using HuggingFace only
-    PROVIDER = 'huggingface'
+    # Choose: 'ollama' or 'huggingface'
+    PROVIDER = os.environ.get('LLM_PROVIDER', 'ollama')
+    
+    # Ollama settings
+    OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
+    OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3')
     
     # HuggingFace settings
-    HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN', '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')
-    HUGGINGFACE_MODEL = os.environ.get('HUGGINGFACE_MODEL', 'microsoft/DialoGPT-medium')
-    HUGGINGFACE_API_URL = 'https://api-inference.huggingface.co/models'
+    HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN', '')
+    HUGGINGFACE_MODEL = os.environ.get('HUGGINGFACE_MODEL', 'tiiuae/falcon-7b-instruct')
+    HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models"
+
+
     
     # Timeout for API calls (seconds)
     TIMEOUT = 30
