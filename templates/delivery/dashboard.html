@@ -99,6 +99,7 @@
                             <th>Total</th>
                             <th>Status</th>
                             <th>Bid Amount</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -112,6 +113,18 @@
                                 </span>
                             </td>
                             <td>${{ order.delivery_bid|round(2) if order.delivery_bid else 'N/A' }}</td>
+                            <td>
+                                {% if order.status == 'delivering' %}
+                                <form method="POST" action="/delivery/mark-delivered" class="d-inline mark-delivered-form">
+                                    <input type="hidden" name="order_id" value="{{ order.id }}">
+                                    <button type="submit" class="btn btn-sm btn-success">
+                                        <i class="fas fa-check-circle"></i> Mark as Delivered
+                                    </button>
+                                </form>
+                                {% elif order.status == 'delivered' %}
+                                <span class="text-muted"><i class="fas fa-check"></i> Delivered</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -311,6 +324,52 @@ window.updateDeliveryComplaintTargets = function() {
                         const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error submitting bid';
                         alert(errorMsg);
                     }
+                });
+                
+                return false;
+            });
+            
+            // Mark as delivered form submission
+            $(document).on('submit', '.mark-delivered-form', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const form = $(this);
+                const orderId = form.find('input[name="order_id"]').val();
+                const submitBtn = form.find('button[type="submit"]');
+                
+                if (!orderId) {
+                    alert('Order ID is missing');
+                    return false;
+                }
+                
+                if (!confirm('Are you sure you want to mark this order as delivered?')) {
+                    return false;
+                }
+                
+                submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processing...');
+                
+                const formData = new FormData();
+                formData.append('order_id', orderId);
+                
+                fetch('/delivery/mark-delivered', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.redirected || response.ok) {
+                        location.reload();
+                    } else {
+                        return response.text().then(text => {
+                            alert('Error marking order as delivered. Please try again.');
+                            submitBtn.prop('disabled', false).html('<i class="fas fa-check-circle"></i> Mark as Delivered');
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error marking order as delivered. Please try again.');
+                    submitBtn.prop('disabled', false).html('<i class="fas fa-check-circle"></i> Mark as Delivered');
                 });
                 
                 return false;

@@ -855,6 +855,21 @@ def manager_dashboard():
     # Get all users for account management (exclude manager)
     all_users = [u for u in users if u.role != 'manager']
     
+    # Get orders with ratings for manager review
+    rated_orders = [o for o in orders if o.status == 'delivered' and o.food_rating]
+    for order in rated_orders:
+        # Add customer name
+        customer = get_user_by_id(order.customer_id)
+        order.customer_name = customer.username if customer else 'Unknown'
+        # Add chef name from dishes
+        chef_ids = set()
+        for item in order.items:
+            dish = dishes.get(item.get('dish_id'))
+            if dish and dish.chef_id:
+                chef_ids.add(dish.chef_id)
+        chef_names = [get_user_by_id(cid).username if get_user_by_id(cid) else 'Unknown' for cid in chef_ids]
+        order.chef_names = ', '.join(chef_names) if chef_names else 'Unknown'
+    
     return render_template('manager/dashboard.html',
                          pending_users=pending_users,
                          pending_complaints=pending_complaints,
@@ -864,7 +879,8 @@ def manager_dashboard():
                          flagged_kb=flagged_kb,
                          pending_kb=pending_kb,
                          employees=employees,
-                         all_users=all_users)
+                         all_users=all_users,
+                         rated_orders=rated_orders)
 
 @bp.route('/manager/approve/<user_id>', methods=['POST'])
 @require_login
@@ -1024,19 +1040,38 @@ def manager_remove_knowledge(entry_id):
 @require_role('manager')
 def manager_accept_bid():
     """Accept a delivery bid"""
-    order_id = request.form.get('order_id')
-    bid_id = request.form.get('bid_id')
-    memo = request.form.get('memo', '').strip()
-    
-    manager_id = session.get('user_id')
-    success, message = accept_delivery_bid(order_id, bid_id, manager_id, memo)
-    
-    if success:
-        flash(message, 'success')
-    else:
-        flash(message, 'danger')
-    
-    return redirect(url_for('main.manager_dashboard'))
+    try:
+        order_id = request.form.get('order_id')
+        bid_id = request.form.get('bid_id')
+        memo = request.form.get('memo', '').strip()
+        
+        print(f"DEBUG manager_accept_bid: order_id={order_id}, bid_id={bid_id}, memo={memo}")
+        
+        if not order_id or not bid_id:
+            print(f"ERROR: Missing required information - order_id={order_id}, bid_id={bid_id}")
+            flash('Missing required information', 'danger')
+            return redirect(url_for('main.manager_dashboard'))
+        
+        manager_id = session.get('user_id')
+        print(f"DEBUG: Calling accept_delivery_bid with order_id={order_id}, bid_id={bid_id}, manager_id={manager_id}")
+        
+        success, message = accept_delivery_bid(order_id, bid_id, manager_id, memo)
+        
+        print(f"DEBUG: accept_delivery_bid returned: success={success}, message={message}")
+        
+        if success:
+            flash(message, 'success')
+        else:
+            flash(message, 'danger')
+        
+        return redirect(url_for('main.manager_dashboard'))
+    except Exception as e:
+        import traceback
+        error_msg = str(e)
+        print(f"EXCEPTION in manager_accept_bid: {error_msg}")
+        traceback.print_exc()
+        flash(f'Error accepting bid: {error_msg}', 'danger')
+        return redirect(url_for('main.manager_dashboard'))
 
 @bp.route('/manager/hr/update', methods=['POST'])
 @require_login
@@ -1199,7 +1234,14 @@ def chef_dashboard():
             if dish:
                 item['dish_name'] = dish.name
     
-    return render_template('chef/dashboard.html', dishes=dishes, user=user, orders=chef_orders)
+    # Get orders with ratings for this chef's dishes
+    rated_orders = [o for o in chef_orders if o.status == 'delivered' and o.food_rating]
+    for order in rated_orders:
+        # Add customer name
+        customer = get_user_by_id(order.customer_id)
+        order.customer_name = customer.username if customer else 'Unknown'
+    
+    return render_template('chef/dashboard.html', dishes=dishes, user=user, orders=chef_orders, rated_orders=rated_orders)
 
 @bp.route('/chef/dish/add', methods=['GET', 'POST'])
 @require_login
@@ -1290,6 +1332,40 @@ def delivery_dashboard():
                          chefs=chefs,
                          delivery_persons=delivery_persons,
                          customers=customers)
+
+@bp.route('/delivery/mark-delivered', methods=['POST'])
+@require_login
+@require_role('delivery')
+def mark_order_delivered():
+    """Mark an order as delivered"""
+    order_id = request.form.get('order_id')
+    user_id = session.get('user_id')
+    
+    if not order_id:
+        flash('Order ID is required', 'danger')
+        return redirect(url_for('main.delivery_dashboard'))
+    
+    order = get_order_by_id(order_id)
+    if not order:
+        flash('Order not found', 'danger')
+        return redirect(url_for('main.delivery_dashboard'))
+    
+    # Verify this delivery person is assigned to this order
+    if order.delivery_person_id != user_id:
+        flash('You are not assigned to this order', 'danger')
+        return redirect(url_for('main.delivery_dashboard'))
+    
+    # Only allow marking as delivered if status is 'delivering'
+    if order.status != 'delivering':
+        flash(f'Order is already {order.status}', 'warning')
+        return redirect(url_for('main.delivery_dashboard'))
+    
+    # Update order status to delivered
+    order.status = 'delivered'
+    save_order(order)
+    
+    flash('Order marked as delivered successfully!', 'success')
+    return redirect(url_for('main.delivery_dashboard'))
 
 @bp.route('/api/v1/delivery/bid', methods=['POST'])
 @require_login

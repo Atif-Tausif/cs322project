@@ -234,7 +234,7 @@
                                     {% endif %}
                                     <button class="btn btn-sm btn-primary" 
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#acceptBidModal{{ bid.id }}"
+                                            data-bs-target="#acceptBidModal{{ bid.id|replace('.', '_')|replace('-', '_') }}"
                                             {% if bid != item.bids[0] %}title="Requires memo"{% endif %}>
                                         Accept
                                     </button>
@@ -248,14 +248,15 @@
             
             <!-- Accept Bid Modal -->
             {% for bid in item.bids %}
-            <div class="modal fade" id="acceptBidModal{{ bid.id }}" tabindex="-1">
+            {% set bid_id_safe = bid.id|replace('.', '_')|replace('-', '_') %}
+            <div class="modal fade" id="acceptBidModal{{ bid_id_safe }}" tabindex="-1">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">Accept Delivery Bid</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <form id="acceptBidForm{{ bid.id }}" class="accept-bid-form">
+                        <form id="acceptBidForm{{ bid_id_safe }}" class="accept-bid-form" data-bid-id="{{ bid.id }}">
                             <input type="hidden" name="order_id" value="{{ item.order.id }}">
                             <input type="hidden" name="bid_id" value="{{ bid.id }}">
                             <div class="modal-body">
@@ -267,17 +268,17 @@
                                     This is not the lowest bid. A memo is required.
                                 </div>
                                 <div class="mb-3">
-                                    <label for="memo{{ bid.id }}" class="form-label">Justification Memo *</label>
-                                    <textarea class="form-control" id="memo{{ bid.id }}" name="memo" rows="3" required></textarea>
+                                    <label for="memo{{ bid_id_safe }}" class="form-label">Justification Memo *</label>
+                                    <textarea class="form-control" id="memo{{ bid_id_safe }}" name="memo" rows="3" required></textarea>
                                 </div>
                                 {% else %}
                                 <input type="hidden" name="memo" value="">
                                 {% endif %}
-                                <div id="acceptBidMessage{{ bid.id }}" class="mt-2"></div>
+                                <div id="acceptBidMessage{{ bid_id_safe }}" class="mt-2"></div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="submit" class="btn btn-primary">
+                                <button type="submit" class="btn btn-primary accept-bid-submit-btn" data-bid-id="{{ bid.id }}">
                                     <span class="btn-text">Accept Bid</span>
                                     <span class="btn-loading" style="display: none;">
                                         <i class="fas fa-spinner fa-spin"></i> Processing...
@@ -506,6 +507,75 @@
             </div>
             {% else %}
             <p class="text-muted">No employees found</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Order Ratings Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-star"></i> Order Ratings</h5>
+        </div>
+        <div class="card-body">
+            {% if rated_orders %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th>Chef</th>
+                            <th>Food Rating</th>
+                            <th>Delivery Rating</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in rated_orders %}
+                        <tr>
+                            <td>{{ order.id[:8] }}...</td>
+                            <td>{{ order.customer_name }}</td>
+                            <td>{{ order.chef_names }}</td>
+                            <td>
+                                {% if order.food_rating %}
+                                <div>
+                                    {% for i in range(5) %}
+                                        {% if i < order.food_rating %}
+                                        <i class="fas fa-star text-warning"></i>
+                                        {% else %}
+                                        <i class="far fa-star text-warning"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <span class="ms-2">({{ order.food_rating }}/5)</span>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">Not rated</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if order.delivery_rating %}
+                                <div>
+                                    {% for i in range(5) %}
+                                        {% if i < order.delivery_rating %}
+                                        <i class="fas fa-star text-warning"></i>
+                                        {% else %}
+                                        <i class="far fa-star text-warning"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <span class="ms-2">({{ order.delivery_rating }}/5)</span>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">Not rated</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ order.created_at[:10] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No rated orders yet</p>
             {% endif %}
         </div>
     </div>
@@ -951,93 +1021,100 @@
             }
         };
         
-        // Set up accept bid form handler FIRST (before document.ready) using event delegation
+        // Set up accept bid form handler using event delegation
         // This ensures it works even if modals are created dynamically
         console.log('Setting up accept bid form handler');
+        
+        // Remove any existing handlers to avoid duplicates
+        $(document).off('submit', '.accept-bid-form');
+        
         $(document).on('submit', '.accept-bid-form', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                console.log('Accept bid form submitted!');
-                
-                const form = $(this);
-                const formId = form.attr('id');
-                console.log('Form ID:', formId);
-                
-                if (!formId || !formId.startsWith('acceptBidForm')) {
-                    console.error('Invalid form ID:', formId);
-                    alert('Error: Invalid form');
-                    return false;
-                }
-                
-                const bidId = formId.replace('acceptBidForm', '');
-                const messageDiv = $('#acceptBidMessage' + bidId);
-                const submitBtn = form.find('button[type="submit"]');
-                const btnText = submitBtn.find('.btn-text');
-                const btnLoading = submitBtn.find('.btn-loading');
-                
-                const orderId = form.find('input[name="order_id"]').val();
-                const bidIdValue = form.find('input[name="bid_id"]').val();
-                const memo = form.find('textarea[name="memo"], input[name="memo"]').val() || '';
-                
-                console.log('Accepting bid:', { orderId, bidId: bidIdValue, memo });
-                
-                if (!orderId || !bidIdValue) {
-                    console.error('Missing required fields:', { orderId, bidId: bidIdValue });
-                    messageDiv.html('<div class="alert alert-danger">Missing required information.</div>');
-                    return false;
-                }
-                
-                // Check if memo is required (not the lowest bid)
-                const memoField = form.find('textarea[name="memo"]');
-                if (memoField.length > 0 && memoField.prop('required') && !memo.trim()) {
-                    messageDiv.html('<div class="alert alert-danger">Memo is required for non-lowest bids.</div>');
-                    return false;
-                }
-                
-                // Disable button and show loading
-                submitBtn.prop('disabled', true);
-                if (btnText.length) btnText.hide();
-                if (btnLoading.length) btnLoading.show();
-                messageDiv.html('');
-                
-                // Submit using form data (the route expects form data, not JSON)
-                const formData = new FormData();
-                formData.append('order_id', orderId);
-                formData.append('bid_id', bidIdValue);
-                formData.append('memo', memo);
-                
-                console.log('Submitting bid acceptance...');
-                
-                fetch('/manager/delivery/accept', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    console.log('Accept bid response status:', response.status, 'redirected:', response.redirected);
-                    if (response.redirected || response.ok) {
-                        // The route redirects, so reload the page
-                        console.log('Bid accepted successfully, reloading page...');
-                        location.reload();
-                    } else {
-                        return response.text().then(text => {
-                            console.error('Error response:', text);
-                            messageDiv.html('<div class="alert alert-danger">Error accepting bid. Please try again.</div>');
-                            submitBtn.prop('disabled', false);
-                            if (btnText.length) btnText.show();
-                            if (btnLoading.length) btnLoading.hide();
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    messageDiv.html('<div class="alert alert-danger">Error accepting bid. Please try again.</div>');
-                    submitBtn.prop('disabled', false);
-                    if (btnText.length) btnText.show();
-                    if (btnLoading.length) btnLoading.hide();
-                });
-                
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Accept bid form submitted!');
+            
+            const form = $(this);
+            const formId = form.attr('id');
+            const actualBidId = form.data('bid-id'); // Get the actual bid ID from data attribute
+            console.log('Form ID:', formId, 'Actual Bid ID:', actualBidId);
+            
+            if (!formId || !formId.startsWith('acceptBidForm')) {
+                console.error('Invalid form ID:', formId);
+                alert('Error: Invalid form');
                 return false;
+            }
+            
+            // Use the safe ID for finding elements, but actual bid ID for submission
+            const bidIdSafe = formId.replace('acceptBidForm', '');
+            const messageDiv = $('#acceptBidMessage' + bidIdSafe);
+            const submitBtn = form.find('button[type="submit"]');
+            const btnText = submitBtn.find('.btn-text');
+            const btnLoading = submitBtn.find('.btn-loading');
+            
+            const orderId = form.find('input[name="order_id"]').val();
+            // Use actual bid ID from data attribute or hidden input
+            const bidIdValue = actualBidId || form.find('input[name="bid_id"]').val();
+            const memo = form.find('textarea[name="memo"], input[name="memo"]').val() || '';
+            
+            console.log('Accepting bid:', { orderId, bidId: bidIdValue, memo });
+            
+            if (!orderId || !bidIdValue) {
+                console.error('Missing required fields:', { orderId, bidId: bidIdValue });
+                messageDiv.html('<div class="alert alert-danger">Missing required information.</div>');
+                return false;
+            }
+            
+            // Check if memo is required (not the lowest bid)
+            const memoField = form.find('textarea[name="memo"]');
+            if (memoField.length > 0 && memoField.prop('required') && !memo.trim()) {
+                messageDiv.html('<div class="alert alert-danger">Memo is required for non-lowest bids.</div>');
+                return false;
+            }
+            
+            // Disable button and show loading
+            submitBtn.prop('disabled', true);
+            if (btnText.length) btnText.hide();
+            if (btnLoading.length) btnLoading.show();
+            messageDiv.html('');
+            
+            // Submit using form data (the route expects form data, not JSON)
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('bid_id', bidIdValue);
+            formData.append('memo', memo);
+            
+            console.log('Submitting bid acceptance to /manager/delivery/accept...');
+            
+            fetch('/manager/delivery/accept', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Accept bid response status:', response.status, 'redirected:', response.redirected);
+                if (response.redirected || response.ok) {
+                    // The route redirects, so reload the page
+                    console.log('Bid accepted successfully, reloading page...');
+                    location.reload();
+                } else {
+                    return response.text().then(text => {
+                        console.error('Error response:', text);
+                        messageDiv.html('<div class="alert alert-danger">Error accepting bid: ' + (text || 'Unknown error') + '</div>');
+                        submitBtn.prop('disabled', false);
+                        if (btnText.length) btnText.show();
+                        if (btnLoading.length) btnLoading.hide();
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                messageDiv.html('<div class="alert alert-danger">Error accepting bid: ' + error.message + '</div>');
+                submitBtn.prop('disabled', false);
+                if (btnText.length) btnText.show();
+                if (btnLoading.length) btnLoading.hide();
+            });
+            
+            return false;
         });
         
         console.log('Accept bid form handler registered');
@@ -1101,12 +1178,162 @@
         });
     }
     
-    // Start initialization
+    // Start initialization 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initManagerDashboard);
     } else {
         initManagerDashboard();
     }
+    
+    // Set up accept bid handler - wait for jQuery to be fully loaded
+    function setupAcceptBidHandler() {
+        if (typeof window.jQuery === 'undefined' && typeof jQuery === 'undefined') {
+            console.log('jQuery not available yet, retrying in 100ms...');
+            setTimeout(setupAcceptBidHandler, 100);
+            return;
+        }
+        
+        const $ = window.jQuery || jQuery;
+        
+        console.log('Setting up accept bid form handler (jQuery available)');
+        
+        // Remove any existing handlers to avoid duplicates
+        $(document).off('submit', '.accept-bid-form');
+        $(document).off('click', '.accept-bid-submit-btn');
+        
+        // Handler for form submission
+        $(document).on('submit', '.accept-bid-form', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Global accept bid form handler triggered!');
+            
+            const form = $(this);
+            const formId = form.attr('id');
+            const actualBidId = form.data('bid-id'); // Get the actual bid ID from data attribute
+            console.log('Form ID:', formId, 'Actual Bid ID:', actualBidId);
+            
+            if (!formId || !formId.startsWith('acceptBidForm')) {
+                console.error('Invalid form ID:', formId);
+                alert('Error: Invalid form');
+                return false;
+            }
+            
+            // Use the safe ID for finding elements, but actual bid ID for submission
+            const bidIdSafe = formId.replace('acceptBidForm', '');
+            const messageDiv = $('#acceptBidMessage' + bidIdSafe);
+            const submitBtn = form.find('button[type="submit"]');
+            const btnText = submitBtn.find('.btn-text');
+            const btnLoading = submitBtn.find('.btn-loading');
+            
+            const orderId = form.find('input[name="order_id"]').val();
+            // Use actual bid ID from data attribute or hidden input
+            const bidIdValue = actualBidId || form.find('input[name="bid_id"]').val();
+            const memo = form.find('textarea[name="memo"], input[name="memo"]').val() || '';
+            
+            console.log('Accepting bid:', { orderId, bidId: bidIdValue, memo });
+            
+            if (!orderId || !bidIdValue) {
+                console.error('Missing required fields');
+                messageDiv.html('<div class="alert alert-danger">Missing required information.</div>');
+                return false;
+            }
+            
+            const memoField = form.find('textarea[name="memo"]');
+            if (memoField.length > 0 && memoField.prop('required') && !memo.trim()) {
+                messageDiv.html('<div class="alert alert-danger">Memo is required for non-lowest bids.</div>');
+                return false;
+            }
+            
+            submitBtn.prop('disabled', true);
+            if (btnText.length) btnText.hide();
+            if (btnLoading.length) btnLoading.show();
+            messageDiv.html('');
+            
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('bid_id', bidIdValue);
+            formData.append('memo', memo);
+            
+            console.log('Submitting to /manager/delivery/accept...');
+            
+            fetch('/manager/delivery/accept', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Response status:', response.status, 'redirected:', response.redirected);
+                if (response.redirected || response.ok) {
+                    console.log('Success, reloading page...');
+                    // Small delay to ensure backend has saved the data
+                    setTimeout(function() {
+                        location.reload();
+                    }, 100);
+                } else {
+                    return response.text().then(text => {
+                        console.error('Error response:', text);
+                        messageDiv.html('<div class="alert alert-danger">Error accepting bid: ' + (text || 'Unknown error') + '</div>');
+                        submitBtn.prop('disabled', false);
+                        if (btnText.length) btnText.show();
+                        if (btnLoading.length) btnLoading.hide();
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Exception:', error);
+                messageDiv.html('<div class="alert alert-danger">Error accepting bid: ' + error.message + '</div>');
+                submitBtn.prop('disabled', false);
+                if (btnText.length) btnText.show();
+                if (btnLoading.length) btnLoading.hide();
+            });
+            
+            return false;
+        });
+        
+        // Also handle button clicks directly as a backup
+        $(document).on('click', '.accept-bid-submit-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Accept bid button clicked directly!');
+            
+            const btn = $(this);
+            const form = btn.closest('form');
+            
+            if (!form.length) {
+                console.error('Form not found for button');
+                alert('Error: Form not found');
+                return false;
+            }
+            
+            // Trigger form submission
+            console.log('Triggering form submit...');
+            form.trigger('submit');
+            
+            return false;
+        });
+        
+        console.log('Accept bid form handler registered successfully');
+    }
+    
+    // Start setting up handler - wait for DOM and jQuery
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(setupAcceptBidHandler, 200);
+        });
+    } else {
+        setTimeout(setupAcceptBidHandler, 200);
+    }
+    
+    // Also try immediately in case everything is already loaded
+    setupAcceptBidHandler();
+    
+    // Debug: Log when page is fully loaded
+    window.addEventListener('load', function() {
+        console.log('Page fully loaded. jQuery available:', typeof jQuery !== 'undefined');
+        console.log('Accept bid forms on page:', document.querySelectorAll('.accept-bid-form').length);
+        setupAcceptBidHandler(); // Try one more time after everything loads
+    });
 })();
 </script>
 {% endblock %}

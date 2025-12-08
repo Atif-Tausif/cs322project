@@ -141,6 +141,73 @@
             {% endif %}
         </div>
     </div>
+    
+    <!-- Order Ratings Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-star"></i> Order Ratings</h5>
+        </div>
+        <div class="card-body">
+            {% if rated_orders %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th>Food Rating</th>
+                            <th>Delivery Rating</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in rated_orders %}
+                        <tr>
+                            <td>{{ order.id[:8] }}...</td>
+                            <td>{{ order.customer_name }}</td>
+                            <td>
+                                {% if order.food_rating %}
+                                <div>
+                                    {% for i in range(5) %}
+                                        {% if i < order.food_rating %}
+                                        <i class="fas fa-star text-warning"></i>
+                                        {% else %}
+                                        <i class="far fa-star text-warning"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <span class="ms-2">({{ order.food_rating }}/5)</span>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">Not rated</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if order.delivery_rating %}
+                                <div>
+                                    {% for i in range(5) %}
+                                        {% if i < order.delivery_rating %}
+                                        <i class="fas fa-star text-warning"></i>
+                                        {% else %}
+                                        <i class="far fa-star text-warning"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <span class="ms-2">({{ order.delivery_rating }}/5)</span>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">Not rated</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ order.created_at[:10] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No rated orders yet</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <script>

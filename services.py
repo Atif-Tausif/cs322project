@@ -431,19 +431,32 @@ def accept_delivery_bid(order_id: str, bid_id: str, manager_id: str, memo: str =
     Accept a delivery bid (manager or system)
     If choosing a higher bid, memo is required
     """
+    print(f"DEBUG accept_delivery_bid: Starting - order_id={order_id}, bid_id={bid_id}, manager_id={manager_id}, memo={memo}")
+    
     bids = get_all_delivery_bids()
+    print(f"DEBUG: Total bids found: {len(bids)}")
+    
     bid = next((b for b in bids if b.id == bid_id and b.order_id == order_id), None)
     
     if not bid:
+        print(f"ERROR: Bid not found - bid_id={bid_id}, order_id={order_id}")
+        print(f"DEBUG: Available bids: {[(b.id, b.order_id) for b in bids]}")
         return False, "Bid not found"
+    
+    print(f"DEBUG: Found bid - id={bid.id}, delivery_person_id={bid.delivery_person_id}, status={bid.status}")
     
     order = get_order_by_id(order_id)
     if not order:
+        print(f"ERROR: Order not found - order_id={order_id}")
         return False, "Order not found"
     
-    # Check if this is not the lowest bid
-    all_bids = get_bids_by_order(order_id)
-    lowest_bid = min(all_bids, key=lambda b: b.bid_amount) if all_bids else None
+    print(f"DEBUG: Found order - id={order.id}, status={order.status}, delivery_person_id={order.delivery_person_id}")
+    
+    # Get ALL bids for this order (not just pending) to find lowest and reject all others
+    # Note: get_all_delivery_bids is already imported at the top of the file
+    all_order_bids = [b for b in bids if b.order_id == order_id]
+    pending_bids = [b for b in all_order_bids if b.status == 'pending']
+    lowest_bid = min(pending_bids, key=lambda b: b.bid_amount) if pending_bids else None
     
     if lowest_bid and bid.id != lowest_bid.id and bid.bid_amount > lowest_bid.bid_amount:
         # Choosing higher bid - memo required
@@ -451,22 +464,36 @@ def accept_delivery_bid(order_id: str, bid_id: str, manager_id: str, memo: str =
             return False, "Memo is required when choosing a bid higher than the lowest bid"
         bid.manager_memo = memo.strip()
     
-    # Reject other bids
-    for other_bid in all_bids:
+    # Reject ALL other bids for this order (clear all bids)
+    for other_bid in all_order_bids:
         if other_bid.id != bid_id:
             other_bid.status = 'rejected'
-            save_delivery_bid(other_bid)
+            try:
+                save_delivery_bid(other_bid)
+                print(f"DEBUG: Rejected bid {other_bid.id}")
+            except Exception as e:
+                print(f"ERROR rejecting bid {other_bid.id}: {e}")
     
     # Accept this bid
     bid.status = 'accepted'
-    save_delivery_bid(bid)
+    try:
+        save_delivery_bid(bid)
+        print(f"DEBUG: Accepted bid {bid_id} for order {order_id}, delivery_person_id={bid.delivery_person_id}")
+    except Exception as e:
+        print(f"ERROR accepting bid: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, f"Error saving bid: {str(e)}"
     
     # Check if customer has free delivery available (VIP benefit)
     customer = get_user_by_id(order.customer_id)
     delivery_cost = bid.bid_amount
     free_delivery_applied = False
     
-    if customer and customer.role == 'vip' and order.free_delivery:
+    # Check if order has free_delivery attribute (for backward compatibility)
+    order_free_delivery = getattr(order, 'free_delivery', False)
+    
+    if customer and customer.role == 'vip' and order_free_delivery:
         # Check if customer has available free deliveries
         available_free_deliveries = customer.free_deliveries_earned - customer.free_deliveries_used
         if available_free_deliveries > 0:
@@ -495,9 +522,28 @@ def accept_delivery_bid(order_id: str, bid_id: str, manager_id: str, memo: str =
             customer.total_spent += delivery_cost
             save_user(customer)
     
-    save_order(order)
+    # Save the order with the assigned delivery person
+    try:
+        save_order(order)
+        print(f"DEBUG: Saved order {order_id} with delivery_person_id={order.delivery_person_id}, status={order.status}")
+    except Exception as e:
+        print(f"ERROR saving order: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, f"Error saving order: {str(e)}"
     
-    message = "Bid accepted"
+    # Verify the order was saved correctly
+    saved_order = get_order_by_id(order_id)
+    if not saved_order:
+        return False, "Order not found after saving"
+    
+    if saved_order.delivery_person_id != bid.delivery_person_id:
+        print(f"ERROR: Order delivery_person_id mismatch! Expected: {bid.delivery_person_id}, Got: {saved_order.delivery_person_id}")
+        return False, f"Failed to assign order to delivery person. Expected {bid.delivery_person_id}, got {saved_order.delivery_person_id}"
+    
+    print(f"DEBUG: Verified order {order_id} saved correctly with delivery_person_id={saved_order.delivery_person_id}")
+    
+    message = f"Bid accepted. Order assigned to delivery person {bid.delivery_person_id}"
     if free_delivery_applied:
         message += f". Free delivery applied! (Saved ${bid.bid_amount:.2f})"
     
