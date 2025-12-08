@@ -177,14 +177,24 @@ def orders():
     
     # Add dish names and prices to orders
     dishes = {d.id: d for d in get_all_dishes()}
+    chefs = {u.id: u.username for u in get_all_users() if u.role == 'chef'}  # ✅ Add chef names
+    delivery_people = {u.id: u.username for u in get_all_users() if u.role == 'delivery'}  # ✅ Add delivery names
+    
     for order in orders:
+        # ✅ Add delivery person name
+        if order.delivery_person_id:
+            order.delivery_person_name = delivery_people.get(order.delivery_person_id, 'Unknown')
+        
         for item in order.items:
             dish = dishes.get(item.get('dish_id'))
             if dish:
                 item['dish_name'] = dish.name
                 item['dish_image'] = dish.image
-                # Use stored price if available, otherwise get current price
                 item['price'] = item.get('price', dish.price)
+                # ✅ ADD THE FULL DISH OBJECT with chef info
+                dish_dict = dish.to_dict()
+                dish_dict['chef_name'] = chefs.get(dish.chef_id, 'Unknown')
+                item['dish'] = dish_dict
     
     return render_template('orders.html', orders=orders)
 
@@ -796,6 +806,19 @@ def manager_dashboard():
     # Get all employees for HR management
     employees = [u for u in users if u.role in ['chef', 'delivery']]
     
+    # Get users available for hiring:
+    # 1. Customers and VIPs (approved or not - can hire them as employees)
+    # 2. Fired employees (role changed to customer, approved=False)
+    # 3. Inactive employees (chef/delivery with approved=False)
+    # Exclude blacklisted users
+    available_for_hire = [
+        u for u in users 
+        if not u.blacklisted and (
+            (u.role in ['customer', 'vip']) or 
+            (u.role in ['chef', 'delivery'] and not u.approved)
+        )
+    ]
+    
     return render_template('manager/dashboard.html',
                          pending_users=pending_users,
                          pending_complaints=pending_complaints,
@@ -804,7 +827,8 @@ def manager_dashboard():
                          orders_without_bids=orders_without_bids if 'orders_without_bids' in locals() else [],
                          flagged_kb=flagged_kb,
                          pending_kb=pending_kb,
-                         employees=employees)
+                         employees=employees,
+                         available_for_hire=available_for_hire)
 
 @bp.route('/manager/approve/<user_id>', methods=['POST'])
 @require_login
@@ -923,9 +947,10 @@ def manager_hr_update():
     
     employee = get_user_by_id(employee_id)
     if not employee:
-        return jsonify({'success': False, 'message': 'Employee not found'})
+        return jsonify({'success': False, 'message': 'User not found'})
     
-    if employee.role not in ['chef', 'delivery']:
+    # For actions other than 'hire', user must be an employee
+    if action != 'hire' and employee.role not in ['chef', 'delivery']:
         return jsonify({'success': False, 'message': 'User is not an employee'})
     
     if action == 'fire':
@@ -956,11 +981,14 @@ def manager_hr_update():
         # Hire the employee
         employee.role = new_role
         employee.approved = True
-        if employee.salary == 0:
+        # Use provided salary or set default
+        if amount > 0:
+            employee.salary = amount
+        elif employee.salary == 0:
             # Set default salary
             employee.salary = 5000.0 if new_role == 'chef' else 3000.0
         save_user(employee)
-        return jsonify({'success': True, 'message': f'Employee {employee.username} has been hired as {new_role}'})
+        return jsonify({'success': True, 'message': f'Employee {employee.username} has been hired as {new_role} with salary ${employee.salary:.2f}'})
     
     elif action == 'raise':
         # Raise salary by percentage or amount
@@ -1218,43 +1246,3 @@ def api_update_order_status():
 # Developer/Testing Routes
 # ============================================================================
 
-@bp.route('/dev/balance')
-@require_login
-@require_role('manager')
-def dev_balance_management():
-    """Developer page for managing customer balances (testing only)"""
-    users = get_all_users()
-    # Sort by role, then username
-    users.sort(key=lambda x: (x.role != 'customer' and x.role != 'vip', x.username))
-    return render_template('dev/balance.html', users=users)
-
-@bp.route('/api/v1/dev/balance/update', methods=['POST'])
-@require_login
-@require_role('manager')
-def api_update_balance():
-    """Update user balance (developer/testing only)"""
-    data = request.get_json()
-    user_id = data.get('user_id')
-    new_balance = float(data.get('balance', 0))
-    
-    if not user_id:
-        return jsonify({'success': False, 'message': 'User ID required'})
-    
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({'success': False, 'message': 'User not found'})
-    
-    # Update balance
-    old_balance = user.balance
-    user.balance = new_balance
-    save_user(user)
-    
-    return jsonify({
-        'success': True, 
-        'message': f'Balance updated from ${old_balance:.2f} to ${new_balance:.2f}',
-        'user': {
-            'id': user.id,
-            'username': user.username,
-            'balance': user.balance
-        }
-    })

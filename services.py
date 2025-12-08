@@ -200,9 +200,13 @@ def file_complaint(complainant_id: str, target_id: str, target_type: str,
     if complainant.role not in ['customer', 'vip', 'delivery']:
         return False, "Only customers and delivery personnel can file complaints/compliments"
     
+    # Customers can file about chefs, delivery, or other customers
+    if complainant.role in ['customer', 'vip'] and target_type not in ['chef', 'delivery', 'customer']:
+        return False, "Customers can only file complaints/compliments about chefs, delivery personnel, or other customers"
+    
     complaint = Complaint(
         complainant_id=complainant_id,
-        target_id=target_id,
+        target_id=target.id,  # Use target.id to ensure we use the actual user ID
         target_type=target_type,
         complaint_type=complaint_type,
         description=description
@@ -216,7 +220,7 @@ def file_complaint(complainant_id: str, target_id: str, target_type: str,
     
     if complaint_type == 'complaint':
         target.complaints_count += weight
-        complainant.complaints_count += 1
+        # Complainant does NOT get a complaint count for filing a complaint
     else:  # compliment
         target.compliments += weight
     
@@ -300,12 +304,14 @@ def resolve_complaint(complaint_id: str, manager_id: str, resolution: str) -> Tu
     complaint.resolved_at = datetime.now().isoformat()
     
     if resolution == 'dismissed':
-        # False complaint - warn complainant
+        # False complaint - warn complainant (customers, VIPs, and delivery people)
         complainant = get_user_by_id(complaint.complainant_id)
         if complainant:
             complainant.warnings += 1
             save_user(complainant)
-            complainant = check_customer_warnings(complainant)
+            # Check warnings for customers/VIPs (delivery people don't get deregistered from warnings)
+            if complainant.role in ['customer', 'vip']:
+                complainant = check_customer_warnings(complainant)
         complaint.dispute_resolution = 'dismissed'
         
         # Remove the complaint/compliment from target's count since it was false

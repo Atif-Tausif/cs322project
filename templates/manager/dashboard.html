@@ -375,6 +375,56 @@
     </div>
     {% endif %}
     
+    <!-- Hire New Employee -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-user-plus"></i> Hire New Employee</h5>
+            <small class="text-muted">Customers, VIPs, and fired employees can be hired as chefs or delivery personnel</small>
+        </div>
+        <div class="card-body">
+            {% if available_for_hire %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Current Role</th>
+                            <th>Status</th>
+                            <th>Email</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in available_for_hire %}
+                        <tr>
+                            <td>{{ user.username }}</td>
+                            <td>
+                                <span class="badge bg-secondary">{{ user.role|title }}</span>
+                            </td>
+                            <td>
+                                {% if user.approved %}
+                                <span class="badge bg-success">Approved</span>
+                                {% else %}
+                                <span class="badge bg-warning">Pending Approval</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.email or 'N/A' }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-success" onclick="showHireModal('{{ user.id }}', '{{ user.username }}', '{{ user.role }}', {{ 1 if user.approved else 0 }})">
+                                    <i class="fas fa-user-plus"></i> Hire
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No users available for hiring. All eligible users are already employees.</p>
+            {% endif %}
+        </div>
+    </div>
+    
     <!-- HR Management -->
     <div class="card mb-4">
         <div class="card-header">
@@ -429,6 +479,41 @@
             {% else %}
             <p class="text-muted">No employees found</p>
             {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Hire Employee Modal -->
+<div class="modal fade" id="hireModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Hire Employee: <span id="hireUserName"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="hireUserId">
+                <div class="alert alert-info" id="hireApprovalWarning" style="display: none;">
+                    <i class="fas fa-info-circle"></i> This user is not yet approved. They will be automatically approved when hired as an employee.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Role</label>
+                    <select class="form-select" id="hireRole">
+                        <option value="chef">Chef</option>
+                        <option value="delivery">Delivery</option>
+                    </select>
+                    <small class="form-text text-muted">Note: Maximum 2 active employees per role</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Initial Salary ($)</label>
+                    <input type="number" class="form-control" id="hireSalary" step="0.01" min="0" value="5000.00">
+                    <small class="form-text text-muted">Default: $5000 for Chef, $3000 for Delivery</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitHire()">Hire Employee</button>
+            </div>
         </div>
     </div>
 </div>
@@ -564,6 +649,69 @@ function updateOrderStatus(orderId, newStatus) {
         }
     });
 }
+
+function showHireModal(userId, userName, currentRole, isApproved) {
+    $('#hireUserId').val(userId);
+    $('#hireUserName').text(userName);
+    $('#hireRole').val('chef'); // Default to chef
+    $('#hireSalary').val('5000.00');
+    
+    // Show warning if user is not approved yet
+    if (!isApproved) {
+        $('#hireApprovalWarning').show();
+    } else {
+        $('#hireApprovalWarning').hide();
+    }
+    
+    $('#hireModal').modal('show');
+}
+
+function submitHire() {
+    const userId = $('#hireUserId').val();
+    const role = $('#hireRole').val();
+    const salary = parseFloat($('#hireSalary').val()) || 0;
+    
+    if (!userId || !role) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    $.ajax({
+        url: '/manager/hr/update',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            employee_id: userId,
+            action: 'hire',
+            role: role,
+            amount: salary
+        }),
+        success: function(response) {
+            if (response.success) {
+                alert(response.message);
+                $('#hireModal').modal('hide');
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to hire employee');
+            }
+        },
+        error: function(xhr) {
+            const errorMsg = xhr.responseJSON?.message || 'Error hiring employee';
+            alert(errorMsg);
+        }
+    });
+}
+
+$(document).ready(function() {
+    $('#hireRole').on('change', function() {
+        const role = $(this).val();
+        if (role === 'chef') {
+            $('#hireSalary').val('5000.00');
+        } else {
+            $('#hireSalary').val('3000.00');
+        }
+    });
+});
 
 function showHRModal(empId, empName, empRole, empSalary, isActive) {
     $('#hrEmployeeId').val(empId);
