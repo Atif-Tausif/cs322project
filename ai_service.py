@@ -1,6 +1,7 @@
 """
 AI Service - LLM integration for chat and recommendations
 """
+import os
 import requests
 import json
 from typing import Dict, List, Optional, Tuple
@@ -38,11 +39,36 @@ def search_knowledge_base(query: str) -> Optional[Dict]:
     
     return None
 
+def call_ollama(prompt: str) -> Optional[str]:
+    """Call Ollama API"""
+    try:
+        url = f"{LLMConfig.OLLAMA_BASE_URL}/api/generate"
+        payload = {
+            "model": LLMConfig.OLLAMA_MODEL,
+            "prompt": prompt,
+            "stream": False
+        }
+        
+        response = requests.post(
+            url,
+            json=payload,
+            timeout=LLMConfig.TIMEOUT
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('response', '')
+        return None
+    except Exception as e:
+        print(f"Ollama error: {e}")
+        return None
 
 def call_huggingface(prompt: str) -> Optional[str]:
     """Call HuggingFace API"""
     try:
         url = f"{LLMConfig.HUGGINGFACE_API_URL}/{LLMConfig.HUGGINGFACE_MODEL}"
+
+
         headers = {
             "Authorization": f"Bearer {LLMConfig.HUGGINGFACE_TOKEN}"
         }
@@ -60,6 +86,9 @@ def call_huggingface(prompt: str) -> Optional[str]:
             json=payload,
             timeout=LLMConfig.TIMEOUT
         )
+        print("HF STATUS:", response.status_code)
+        print("HF RAW RESPONSE:", response.text[:500])
+
         
         if response.status_code == 200:
             result = response.json()
@@ -76,6 +105,13 @@ def get_ai_response(message: str, user_id: Optional[str] = None) -> Dict:
     Get AI response to user message
     Returns: {'success': bool, 'reply': str, 'source': str}
     """
+
+    print("DEBUG LLM Provider:", LLMConfig.PROVIDER)
+    print("DEBUG HF Token Exists:", bool(LLMConfig.HUGGINGFACE_TOKEN))
+    print("DEBUG Model:", LLMConfig.HUGGINGFACE_MODEL)
+
+
+
     # First, try knowledge base
     kb_result = search_knowledge_base(message)
     if kb_result:
@@ -100,9 +136,11 @@ def get_ai_response(message: str, user_id: Optional[str] = None) -> Dict:
     
     prompt = f"{context}\n\nCustomer: {message}\nAssistant:"
     
-    # Use HuggingFace LLM
+    # Try LLM
     reply = None
-    if LLMConfig.PROVIDER == 'huggingface' and LLMConfig.HUGGINGFACE_TOKEN:
+    if LLMConfig.PROVIDER == 'ollama':
+        reply = call_ollama(prompt)
+    elif LLMConfig.PROVIDER == 'huggingface' and LLMConfig.HUGGINGFACE_TOKEN:
         reply = call_huggingface(prompt)
     
     if reply:
