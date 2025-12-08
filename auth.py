@@ -19,6 +19,10 @@ def login_user(username: str, password: str) -> tuple:
     if not verify_password(password, user.password_hash):
         return False, None, "Invalid username or password"
     
+    # Check if user is blacklisted - blacklisted users cannot log in
+    if user.blacklisted:
+        return False, None, "This account has been blacklisted. Please contact the manager."
+    
     if user.role in ['customer', 'vip'] and not user.approved:
         return False, None, "Your account is pending manager approval"
     
@@ -54,7 +58,7 @@ def require_login(f):
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             flash('Please login to access this page', 'warning')
-            return redirect(url_for('login', next=request.url))
+            return redirect(url_for('main.login', next=request.url))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -65,12 +69,12 @@ def require_role(*roles):
         def decorated_function(*args, **kwargs):
             if 'user_id' not in session:
                 flash('Please login to access this page', 'warning')
-                return redirect(url_for('login', next=request.url))
+                return redirect(url_for('main.login', next=request.url))
             
             user_role = session.get('role')
             if user_role not in roles:
                 flash('You do not have permission to access this page', 'danger')
-                return redirect(url_for('index'))
+                return redirect(url_for('main.index'))
             
             return f(*args, **kwargs)
         return decorated_function
@@ -82,12 +86,22 @@ def require_approved(f):
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             flash('Please login to access this page', 'warning')
-            return redirect(url_for('login', next=request.url))
+            return redirect(url_for('main.login', next=request.url))
         
         user = get_current_user()
+        if not user:
+            flash('Please login to access this page', 'warning')
+            return redirect(url_for('main.login', next=request.url))
+        
+        # Check if user is blacklisted - blacklisted users cannot access pages
+        if user.blacklisted:
+            logout_user()
+            flash('This account has been blacklisted. Please contact the manager.', 'danger')
+            return redirect(url_for('main.index'))
+        
         if user and user.role in ['customer', 'vip'] and not user.approved:
             flash('Your account is pending manager approval', 'warning')
-            return redirect(url_for('index'))
+            return redirect(url_for('main.index'))
         
         return f(*args, **kwargs)
     return decorated_function

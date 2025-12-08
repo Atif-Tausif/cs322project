@@ -170,17 +170,19 @@ def profile():
         from ai_service import get_flavor_preferences_from_orders
         flavor_preferences = get_flavor_preferences_from_orders(user.id)
     
-    # Get chefs and delivery persons for complaint form (only for customers/VIPs)
+    # Get chefs, delivery persons, and customers for complaint/compliment form (only for customers/VIPs)
     chefs = []
     delivery_persons = []
+    customers = []
     if user.role in ['customer', 'vip']:
         all_users = get_all_users()
         chefs = [u.to_dict() for u in all_users if u.role == 'chef' and u.approved]
         delivery_persons = [u.to_dict() for u in all_users if u.role == 'delivery' and u.approved]
+        customers = [u.to_dict() for u in all_users if u.role in ['customer', 'vip'] and u.approved and u.id != user.id]
     
     return render_template('profile.html', user=user, orders=orders[:10], 
                          flavor_analysis=flavor_analysis, flavor_preferences=flavor_preferences,
-                         my_complaints=my_complaints, chefs=chefs, delivery_persons=delivery_persons)
+                         my_complaints=my_complaints, chefs=chefs, delivery_persons=delivery_persons, customers=customers)
 
 @bp.route('/orders')
 @require_login
@@ -649,6 +651,27 @@ def api_cart_update():
     
     return jsonify({'success': False, 'message': 'Item not in cart'})
 
+@bp.route('/api/v1/account/closure/request', methods=['POST'])
+@require_login
+@require_approved
+def api_request_account_closure():
+    """Request account closure (customer only)"""
+    user = get_current_user()
+    
+    if user.role not in ['customer', 'vip']:
+        return jsonify({'success': False, 'message': 'Only customers can request account closure'})
+    
+    if user.closure_requested:
+        return jsonify({'success': False, 'message': 'You have already requested account closure. Please wait for manager review.'})
+    
+    user.closure_requested = True
+    save_user(user)
+    
+    return jsonify({
+        'success': True,
+        'message': 'Account closure request submitted. The manager will review your request and make a final decision.'
+    })
+
 @bp.route('/api/v1/deposit', methods=['POST'])
 @require_login
 @require_approved
@@ -810,6 +833,9 @@ def manager_dashboard():
     users = get_all_users()
     pending_users = [u for u in users if u.role in ['customer', 'vip'] and not u.approved]
     
+    # Get account closure requests
+    closure_requests = [u for u in users if u.role in ['customer', 'vip'] and u.closure_requested]
+    
     # Get pending complaints
     from database import get_all_complaints
     complaints = get_all_complaints()
@@ -888,6 +914,7 @@ def manager_dashboard():
     
     return render_template('manager/dashboard.html',
                          pending_users=pending_users,
+                         closure_requests=closure_requests,
                          pending_complaints=pending_complaints,
                          pending_orders=pending_orders,
                          orders_with_bids=orders_with_bids,
@@ -987,8 +1014,19 @@ def manager_manage_account():
     
     elif action == 'unblacklist':
         user.blacklisted = False
+        # Clear all warnings
+        user.warnings = 0
+        # Clear VIP status if they had it (fresh start)
+        if user.role == 'vip':
+            user.vip_since = None
+            user.free_deliveries_used = 0
+            user.free_deliveries_earned = 0
+        # Make them a fresh customer (not visitor)
+        user.role = 'customer'
+        # Ensure they're approved as a fresh customer
+        user.approved = True
         save_user(user)
-        return jsonify({'success': True, 'message': f'Blacklist removed for {user.username}'})
+        return jsonify({'success': True, 'message': f'Blacklist removed for {user.username}. Warnings cleared and account restored as fresh customer.'})
     
     elif action == 'close':
         blacklist = data.get('blacklist', False)
@@ -1000,10 +1038,39 @@ def manager_manage_account():
             user.balance = 0  # For now, just zero it out
         
         user.approved = False
+        user.closure_requested = False  # Clear closure request flag
         if blacklist:
             user.blacklisted = True
         save_user(user)
         return jsonify({'success': True, 'message': f'Account for {user.username} closed'})
+    
+    elif action == 'approve_closure':
+        blacklist = data.get('blacklist', False)
+        refund_amount = user.balance
+        
+        # Refund balance
+        user.balance = 0.0
+        
+        # Close account
+        user.approved = False
+        user.role = 'visitor'
+        user.closure_requested = False  # Clear closure request flag
+        
+        if blacklist:
+            user.blacklisted = True
+        
+        save_user(user)
+        
+        message = f'Account closure approved. Refunded ${refund_amount:.2f}.'
+        if blacklist:
+            message += ' User has been blacklisted.'
+        
+        return jsonify({'success': True, 'message': message})
+    
+    elif action == 'deny_closure':
+        user.closure_requested = False  # Clear closure request flag
+        save_user(user)
+        return jsonify({'success': True, 'message': f'Account closure request denied for {user.username}'})
     
     return jsonify({'success': False, 'message': 'Invalid action'})
 

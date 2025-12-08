@@ -42,6 +42,13 @@
                         <strong>Warnings:</strong> {{ user.warnings }}
                     </p>
                     {% endif %}
+                    {% if user.role in ['customer', 'vip'] %}
+                    <hr>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="requestClosureBtn">
+                        <i class="fas fa-user-times"></i> Request Account Closure
+                    </button>
+                    <div id="closureMessage" class="mt-2"></div>
+                    {% endif %}
                 </div>
             </div>
             
@@ -205,21 +212,29 @@
                 </div>
             </div>
             
-            <!-- File a Complaint Section -->
+            <!-- File a Complaint/Compliment Section -->
             {% if user.role in ['customer', 'vip'] %}
             <div class="card mb-4">
-                <div class="card-header bg-danger text-white">
-                    <h5><i class="fas fa-exclamation-circle"></i> File a Complaint</h5>
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="fas fa-comment-alt"></i> File a Complaint or Compliment</h5>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted">Submit a complaint about a chef or delivery person. The manager will review your complaint and take appropriate action.</p>
+                    <p class="text-muted">Submit a complaint or compliment about a chef or delivery person. The manager will review it and take appropriate action.</p>
                     <form id="complaintForm">
                         <div class="mb-3">
-                            <label for="complaintTargetType" class="form-label">Complain About</label>
+                            <label for="complaintType" class="form-label">Type</label>
+                            <select class="form-select" id="complaintType" required>
+                                <option value="complaint">Complaint</option>
+                                <option value="compliment">Compliment</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="complaintTargetType" class="form-label">About</label>
                             <select class="form-select" id="complaintTargetType" required onchange="updateComplaintTargets()">
                                 <option value="">Select type...</option>
                                 <option value="chef">Chef</option>
                                 <option value="delivery">Delivery Person</option>
+                                <option value="customer">Customer</option>
                             </select>
                         </div>
                         <div class="mb-3" id="targetSelectGroup" style="display: none;">
@@ -231,10 +246,10 @@
                         <div class="mb-3">
                             <label for="complaintDescription" class="form-label">Description</label>
                             <textarea class="form-control" id="complaintDescription" rows="4" 
-                                      placeholder="Please describe your complaint in detail..." required></textarea>
+                                      placeholder="Please describe in detail..." required></textarea>
                         </div>
-                        <button type="submit" class="btn btn-danger">
-                            <i class="fas fa-paper-plane"></i> Submit Complaint
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i> Submit
                         </button>
                     </form>
                     <div id="complaintMessage" class="mt-3"></div>
@@ -284,9 +299,10 @@
 </div>
 
 <script>
-// Store chefs and delivery persons data
+// Store chefs, delivery persons, and customers data
 const chefsData = {{ chefs|tojson }};
 const deliveryPersonsData = {{ delivery_persons|tojson }};
+const customersData = {{ customers|tojson }};
 
 // Make updateComplaintTargets globally accessible
 window.updateComplaintTargets = function() {
@@ -308,7 +324,15 @@ window.updateComplaintTargets = function() {
     targetGroup.show();
     targetSelect.html('<option value="">Select a person...</option>');
     
-    const targets = targetType === 'chef' ? chefsData : deliveryPersonsData;
+    let targets = [];
+    if (targetType === 'chef') {
+        targets = chefsData || [];
+    } else if (targetType === 'delivery') {
+        targets = deliveryPersonsData || [];
+    } else if (targetType === 'customer') {
+        targets = customersData || [];
+    }
+    
     if (targets && targets.length > 0) {
         targets.forEach(function(person) {
             targetSelect.append(`<option value="${person.id}">${person.username}</option>`);
@@ -365,13 +389,14 @@ window.disputeComplaint = function(complaintId) {
                 e.stopPropagation();
                 
                 console.log('Complaint form submitted');
+                const complaintType = $('#complaintType').val();
                 const targetType = $('#complaintTargetType').val();
                 const targetId = $('#complaintTargetId').val();
                 const description = $('#complaintDescription').val().trim();
                 const messageDiv = $('#complaintMessage');
                 const submitBtn = $(this).find('button[type="submit"]');
                 
-                if (!targetType || !targetId || !description) {
+                if (!complaintType || !targetType || !targetId || !description) {
                     messageDiv.html('<div class="alert alert-danger">Please fill in all fields.</div>');
                     return false;
                 }
@@ -380,7 +405,7 @@ window.disputeComplaint = function(complaintId) {
                 submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Submitting...');
                 messageDiv.html('');
                 
-                console.log('Sending complaint:', { target_id: targetId, target_type: targetType, description: description });
+                console.log('Sending complaint/compliment:', { target_id: targetId, target_type: targetType, complaint_type: complaintType, description: description });
                 
                 $.ajax({
                     url: '/api/v1/complaint',
@@ -389,28 +414,29 @@ window.disputeComplaint = function(complaintId) {
                     data: JSON.stringify({
                         target_id: targetId,
                         target_type: targetType,
-                        complaint_type: 'complaint',
+                        complaint_type: complaintType,
                         description: description
                     }),
                     success: function(response) {
                         console.log('Complaint response:', response);
                         if (response.success) {
-                            messageDiv.html('<div class="alert alert-success">Complaint submitted successfully! The manager will review it.</div>');
+                            const typeText = complaintType === 'compliment' ? 'Compliment' : 'Complaint';
+                            messageDiv.html('<div class="alert alert-success">' + typeText + ' submitted successfully! The manager will review it.</div>');
                             $('#complaintForm')[0].reset();
                             $('#targetSelectGroup').hide();
                             setTimeout(function() {
                                 location.reload();
                             }, 2000);
                         } else {
-                            messageDiv.html('<div class="alert alert-danger">' + (response.message || 'Failed to submit complaint') + '</div>');
-                            submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit Complaint');
+                            messageDiv.html('<div class="alert alert-danger">' + (response.message || 'Failed to submit') + '</div>');
+                            submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit');
                         }
                     },
                     error: function(xhr) {
                         console.error('Complaint error:', xhr);
-                        const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error submitting complaint. Please try again.';
+                        const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error submitting. Please try again.';
                         messageDiv.html('<div class="alert alert-danger">' + errorMsg + '</div>');
-                        submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit Complaint');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit');
                     }
                 });
                 
@@ -510,6 +536,62 @@ window.disputeComplaint = function(complaintId) {
         document.addEventListener('DOMContentLoaded', initDeposit);
     } else {
         initDeposit();
+    }
+})();
+
+// Handle account closure request
+(function() {
+    function initAccountClosure() {
+        if (typeof jQuery === 'undefined') {
+            console.log('jQuery not loaded yet, retrying...');
+            setTimeout(initAccountClosure, 100);
+            return;
+        }
+        
+        jQuery(document).ready(function($) {
+            $(document).on('click', '#requestClosureBtn', function(e) {
+                e.preventDefault();
+                
+                if (!confirm('Are you sure you want to request account closure? This request will be sent to the manager for review. You will not be able to use your account until the manager makes a decision.')) {
+                    return false;
+                }
+                
+                const btn = $(this);
+                const messageDiv = $('#closureMessage');
+                
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Requesting...');
+                messageDiv.html('');
+                
+                $.ajax({
+                    url: '/api/v1/account/closure/request',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({}),
+                    success: function(response) {
+                        if (response.success) {
+                            messageDiv.html('<div class="alert alert-success">' + response.message + '</div>');
+                            btn.hide();
+                        } else {
+                            messageDiv.html('<div class="alert alert-danger">' + (response.message || 'Failed to request account closure') + '</div>');
+                            btn.prop('disabled', false).html('<i class="fas fa-user-times"></i> Request Account Closure');
+                        }
+                    },
+                    error: function(xhr) {
+                        const errorMsg = xhr.responseJSON?.message || 'Error requesting account closure. Please try again.';
+                        messageDiv.html('<div class="alert alert-danger">' + errorMsg + '</div>');
+                        btn.prop('disabled', false).html('<i class="fas fa-user-times"></i> Request Account Closure');
+                    }
+                });
+                
+                return false;
+            });
+        });
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAccountClosure);
+    } else {
+        initAccountClosure();
     }
 })();
 </script>

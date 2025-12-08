@@ -136,16 +136,23 @@
         </div>
     </div>
     
-    <!-- File a Complaint Section -->
+    <!-- File a Complaint/Compliment Section -->
     <div class="card mb-4">
-        <div class="card-header bg-danger text-white">
-            <h5><i class="fas fa-exclamation-circle"></i> File a Complaint</h5>
+        <div class="card-header bg-primary text-white">
+            <h5><i class="fas fa-comment-alt"></i> File a Complaint or Compliment</h5>
         </div>
         <div class="card-body">
-            <p class="text-muted">Submit a complaint about a chef, other delivery person, or customer. The manager will review your complaint and take appropriate action.</p>
+            <p class="text-muted">Submit a complaint or compliment about a chef, other delivery person, or customer. The manager will review it and take appropriate action.</p>
             <form id="deliveryComplaintForm">
                 <div class="mb-3">
-                    <label for="deliveryComplaintTargetType" class="form-label">Complain About</label>
+                    <label for="deliveryComplaintType" class="form-label">Type</label>
+                    <select class="form-select" id="deliveryComplaintType" required>
+                        <option value="complaint">Complaint</option>
+                        <option value="compliment">Compliment</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="deliveryComplaintTargetType" class="form-label">About</label>
                     <select class="form-select" id="deliveryComplaintTargetType" required onchange="updateDeliveryComplaintTargets()">
                         <option value="">Select type...</option>
                         <option value="chef">Chef</option>
@@ -162,10 +169,10 @@
                 <div class="mb-3">
                     <label for="deliveryComplaintDescription" class="form-label">Description</label>
                     <textarea class="form-control" id="deliveryComplaintDescription" rows="4" 
-                              placeholder="Please describe your complaint in detail..." required></textarea>
+                              placeholder="Please describe in detail..." required></textarea>
                 </div>
-                <button type="submit" class="btn btn-danger">
-                    <i class="fas fa-paper-plane"></i> Submit Complaint
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Submit
                 </button>
             </form>
             <div id="deliveryComplaintMessage" class="mt-3"></div>
@@ -381,13 +388,14 @@ window.updateDeliveryComplaintTargets = function() {
                 e.stopPropagation();
                 
                 console.log('Complaint form submitted');
+                const complaintType = $('#deliveryComplaintType').val();
                 const targetType = $('#deliveryComplaintTargetType').val();
                 const targetId = $('#deliveryComplaintTargetId').val();
                 const description = $('#deliveryComplaintDescription').val().trim();
                 const messageDiv = $('#deliveryComplaintMessage');
                 const submitBtn = $(this).find('button[type="submit"]');
                 
-                if (!targetType || !targetId || !description) {
+                if (!complaintType || !targetType || !targetId || !description) {
                     messageDiv.html('<div class="alert alert-danger">Please fill in all fields.</div>');
                     return false;
                 }
@@ -398,7 +406,7 @@ window.updateDeliveryComplaintTargets = function() {
                 const complaintData = {
                     target_id: targetId,
                     target_type: targetType,
-                    complaint_type: 'complaint',
+                    complaint_type: complaintType,
                     description: description
                 };
                 
@@ -412,22 +420,23 @@ window.updateDeliveryComplaintTargets = function() {
                     success: function(response) {
                         console.log('Complaint response:', response);
                         if (response.success) {
-                            messageDiv.html('<div class="alert alert-success">Complaint submitted successfully! The manager will review it.</div>');
+                            const typeText = complaintType === 'compliment' ? 'Compliment' : 'Complaint';
+                            messageDiv.html('<div class="alert alert-success">' + typeText + ' submitted successfully! The manager will review it.</div>');
                             $('#deliveryComplaintForm')[0].reset();
                             $('#deliveryTargetSelectGroup').hide();
                             setTimeout(function() {
                                 location.reload();
                             }, 2000);
                         } else {
-                            messageDiv.html('<div class="alert alert-danger">' + (response.message || 'Failed to submit complaint') + '</div>');
-                            submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit Complaint');
+                            messageDiv.html('<div class="alert alert-danger">' + (response.message || 'Failed to submit') + '</div>');
+                            submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit');
                         }
                     },
                     error: function(xhr) {
                         console.error('Complaint error:', xhr);
-                        const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error submitting complaint. Please try again.';
+                        const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error submitting. Please try again.';
                         messageDiv.html('<div class="alert alert-danger">' + errorMsg + '</div>');
-                        submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit Complaint');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit');
                     }
                 });
                 

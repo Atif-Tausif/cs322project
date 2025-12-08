@@ -140,6 +140,26 @@ def submit_rating(order_id: str, user_id: str, dish_id: str, food_rating: int,
     dish.ratings_count = len(dish_ratings)
     save_dish(dish)
     
+    # Update chef rating based on all their dishes' ratings
+    chef = get_user_by_id(dish.chef_id)
+    if chef and chef.role == 'chef':
+        # Get all dishes by this chef
+        all_dishes = get_all_dishes()
+        chef_dishes = [d for d in all_dishes if d.chef_id == chef.id]
+        
+        # Calculate average rating across all chef's dishes
+        all_chef_ratings = []
+        for chef_dish in chef_dishes:
+            dish_ratings_list = [r.rating for r in get_ratings_by_entity(chef_dish.id, 'dish')]
+            all_chef_ratings.extend(dish_ratings_list)
+        
+        if all_chef_ratings:
+            chef.rating = calculate_average_rating(all_chef_ratings)
+            chef.ratings_count = len(all_chef_ratings)
+            save_user(chef)
+            # Check chef performance after rating update
+            check_employee_performance(chef)
+    
     # Update order
     order.food_rating = food_rating
     save_order(order)
@@ -170,6 +190,8 @@ def submit_rating(order_id: str, user_id: str, dish_id: str, food_rating: int,
             delivery_person.rating = calculate_average_rating(delivery_ratings)
             delivery_person.ratings_count = len(delivery_ratings)
             save_user(delivery_person)
+            # Check delivery person performance after rating update
+            check_employee_performance(delivery_person)
     
     return True, "Rating submitted successfully"
 

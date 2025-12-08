@@ -84,6 +84,51 @@
         </div>
     </div>
     
+    <!-- Account Closure Requests -->
+    {% if closure_requests %}
+    <div class="card mb-4">
+        <div class="card-header bg-warning">
+            <h5><i class="fas fa-user-times"></i> Account Closure Requests</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Balance</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in closure_requests %}
+                        <tr>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.email or 'N/A' }}</td>
+                            <td>{{ user.role|title }}</td>
+                            <td>${{ user.balance|round(2) }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-success" onclick="approveClosureRequest('{{ user.id }}', false)">
+                                    <i class="fas fa-check"></i> Approve (No Blacklist)
+                                </button>
+                                <button class="btn btn-sm btn-warning" onclick="approveClosureRequest('{{ user.id }}', true)">
+                                    <i class="fas fa-ban"></i> Approve & Blacklist
+                                </button>
+                                <button class="btn btn-sm btn-secondary" onclick="denyClosureRequest('{{ user.id }}')">
+                                    <i class="fas fa-times"></i> Deny
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- All Orders -->
     <div class="card mb-4">
         <div class="card-header">
@@ -1335,5 +1380,64 @@
         setupAcceptBidHandler(); // Try one more time after everything loads
     });
 })();
+
+// Account closure request handlers
+function approveClosureRequest(userId, blacklist) {
+    if (!confirm(`Are you sure you want to approve account closure${blacklist ? ' and blacklist this user' : ''}?`)) {
+        return;
+    }
+    
+    $.ajax({
+        url: '/manager/account/manage',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            user_id: userId,
+            action: 'approve_closure',
+            blacklist: blacklist,
+            refund_balance: true
+        }),
+        success: function(response) {
+            if (response.success) {
+                alert(response.message);
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to approve closure request');
+            }
+        },
+        error: function(xhr) {
+            const errorMsg = xhr.responseJSON?.message || 'Error approving closure request';
+            alert(errorMsg);
+        }
+    });
+}
+
+function denyClosureRequest(userId) {
+    if (!confirm('Are you sure you want to deny this account closure request?')) {
+        return;
+    }
+    
+    $.ajax({
+        url: '/manager/account/manage',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            user_id: userId,
+            action: 'deny_closure'
+        }),
+        success: function(response) {
+            if (response.success) {
+                alert(response.message);
+                location.reload();
+            } else {
+                alert(response.message || 'Failed to deny closure request');
+            }
+        },
+        error: function(xhr) {
+            const errorMsg = xhr.responseJSON?.message || 'Error denying closure request';
+            alert(errorMsg);
+        }
+    });
+}
 </script>
 {% endblock %}

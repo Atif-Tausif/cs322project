@@ -112,7 +112,7 @@
                                 <div class="mb-3">
                                     <label>Food Rating</label>
                                     <div class="rating-input">
-                                        {% for i in range(1, 6) %}
+                                        {% for i in range(5, 0, -1) %}
                                         <input type="radio" name="food_rating" value="{{ i }}" id="food{{ order.id }}_{{ i }}" required>
                                         <label for="food{{ order.id }}_{{ i }}" class="star-label">
                                             <i class="fas fa-star"></i>
@@ -125,7 +125,7 @@
                                 <div class="mb-3">
                                     <label>Delivery Rating</label>
                                     <div class="rating-input">
-                                        {% for i in range(1, 6) %}
+                                        {% for i in range(5, 0, -1) %}
                                         <input type="radio" name="delivery_rating" value="{{ i }}" id="delivery{{ order.id }}_{{ i }}">
                                         <label for="delivery{{ order.id }}_{{ i }}" class="star-label">
                                             <i class="fas fa-star"></i>

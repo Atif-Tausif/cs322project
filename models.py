@@ -22,6 +22,7 @@ class User:
         self.created_at = kwargs.get('created_at', datetime.now().isoformat())
         self.approved = kwargs.get('approved', False)  # For customer registration approval
         self.blacklisted = kwargs.get('blacklisted', False)  # Blacklist flag
+        self.closure_requested = kwargs.get('closure_requested', False)  # Account closure request flag
         
         # Employee-specific fields
         self.salary = kwargs.get('salary', 0.0)
@@ -64,6 +65,7 @@ class User:
             'created_at': self.created_at,
             'approved': self.approved,
             'blacklisted': self.blacklisted,
+            'closure_requested': self.closure_requested,
             'salary': self.salary,
             'rating': self.rating,
             'ratings_count': self.ratings_count,
