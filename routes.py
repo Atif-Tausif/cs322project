@@ -480,13 +480,29 @@ def api_rating():
     data = request.get_json()
     order_id = data.get('order_id')
     dish_id = data.get('dish_id')
-    food_rating = int(data.get('food_rating', 0))
-    delivery_rating = data.get('delivery_rating')
+    food_rating_raw = data.get('food_rating')
+    delivery_rating_raw = data.get('delivery_rating')
     delivery_person_id = data.get('delivery_person_id')
     comment = data.get('comment', '')
     
+    # Validate food rating
+    try:
+        food_rating = int(food_rating_raw) if food_rating_raw is not None else 0
+    except (ValueError, TypeError):
+        food_rating = 0
+    
     if not order_id or not dish_id or not (1 <= food_rating <= 5):
-        return jsonify({'success': False, 'message': 'Invalid rating data'})
+        return jsonify({'success': False, 'message': f'Invalid rating data: food_rating={food_rating_raw} (must be 1-5)'})
+    
+    # Validate delivery rating if provided
+    delivery_rating = None
+    if delivery_rating_raw is not None:
+        try:
+            delivery_rating = int(delivery_rating_raw)
+            if not (1 <= delivery_rating <= 5):
+                delivery_rating = None
+        except (ValueError, TypeError):
+            delivery_rating = None
     
     user_id = session.get('user_id')
     success, message = submit_rating(

@@ -273,19 +273,40 @@ function submitComplaint(orderId) {
 
 function submitRating(orderId) {
     const form = document.getElementById('ratingForm' + orderId);
+    
+    // Get the selected food rating radio button
+    const foodRatingInput = form.querySelector('input[name="food_rating"]:checked');
+    if (!foodRatingInput) {
+        alert('Please select a food rating');
+        return;
+    }
+    
+    const foodRating = parseInt(foodRatingInput.value);
+    if (isNaN(foodRating) || foodRating < 1 || foodRating > 5) {
+        alert('Invalid food rating');
+        return;
+    }
+    
     const formData = new FormData(form);
     
     const data = {
         order_id: formData.get('order_id'),
         dish_id: formData.get('dish_id'),
-        food_rating: parseInt(formData.get('food_rating')),
+        food_rating: foodRating,
         comment: formData.get('comment') || ''
     };
     
-    if (formData.get('delivery_rating')) {
-        data.delivery_rating = parseInt(formData.get('delivery_rating'));
-        data.delivery_person_id = formData.get('delivery_person_id');
+    // Get delivery rating if provided
+    const deliveryRatingInput = form.querySelector('input[name="delivery_rating"]:checked');
+    if (deliveryRatingInput) {
+        const deliveryRating = parseInt(deliveryRatingInput.value);
+        if (!isNaN(deliveryRating) && deliveryRating >= 1 && deliveryRating <= 5) {
+            data.delivery_rating = deliveryRating;
+            data.delivery_person_id = formData.get('delivery_person_id');
+        }
     }
+    
+    console.log('Submitting rating:', data);
     
     $.ajax({
         url: '/api/v1/rating',
@@ -299,8 +320,10 @@ function submitRating(orderId) {
                 alert(response.message || 'Failed to submit rating');
             }
         },
-        error: function() {
-            alert('Error submitting rating');
+        error: function(xhr) {
+            console.error('Rating submission error:', xhr);
+            const errorMsg = xhr.responseJSON?.message || 'Error submitting rating';
+            alert(errorMsg);
         }
     });
 }
