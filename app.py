@@ -100,6 +100,7 @@ def initialize_database():
                 'price': 12.99,
                 'category': 'main',
                 'flavor_tags': ['savory'],
+                'image': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=300&fit=crop',
                 'chef_id': chefs[0].id if chefs else None
             },
             {
@@ -108,6 +109,7 @@ def initialize_database():
                 'price': 15.99,
                 'category': 'main',
                 'flavor_tags': ['savory'],
+                'image': 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400&h=300&fit=crop',
                 'chef_id': chefs[0].id if chefs else None
             },
             {
@@ -116,6 +118,7 @@ def initialize_database():
                 'price': 10.99,
                 'category': 'appetizers',
                 'flavor_tags': ['spicy'],
+                'image': 'https://img.freepik.com/premium-photo/grilled-spicy-chicken-wings-with-ketchup-black-plate-dark-slate-stone-concrete_662214-219187.jpg?w=400&h=300&fit=crop',
                 'chef_id': chefs[0].id if chefs else None
             },
             {
@@ -124,6 +127,7 @@ def initialize_database():
                 'price': 8.99,
                 'category': 'desserts',
                 'flavor_tags': ['sweet'],
+                'image': 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=400&h=300&fit=crop',
                 'chef_id': chefs[1].id if len(chefs) > 1 else chefs[0].id if chefs else None
             },
             {
@@ -133,6 +137,107 @@ def initialize_database():
                 'category': 'main',
                 'flavor_tags': ['savory'],
                 'vip_only': True,
+                'image': 'https://images.unsplash.com/photo-1600891965053-dc9e460f3a53?auto=format&fit=crop&w=400&h=300&q=80',
+                'chef_id': chefs[0].id if chefs else None
+            },
+            # Additional non-VIP dishes
+            {
+                'name': 'Caesar Salad',
+                'description': 'Fresh romaine lettuce with Caesar dressing, croutons, and parmesan',
+                'price': 9.99,
+                'category': 'appetizers',
+                'flavor_tags': ['savory', 'tangy'],
+                'image': 'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400&h=300&fit=crop',
+                'chef_id': chefs[0].id if chefs else None
+            },
+            {
+                'name': 'Grilled Salmon',
+                'description': 'Fresh Atlantic salmon with lemon butter sauce and seasonal vegetables',
+                'price': 18.99,
+                'category': 'main',
+                'flavor_tags': ['savory'],
+                'image': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&h=300&fit=crop',
+                'chef_id': chefs[1].id if len(chefs) > 1 else chefs[0].id if chefs else None
+            },
+            {
+                'name': 'French Onion Soup',
+                'description': 'Classic French onion soup with melted Gruyère cheese',
+                'price': 7.99,
+                'category': 'appetizers',
+                'flavor_tags': ['savory'],
+                'image': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=400&h=300&fit=crop',
+                'chef_id': chefs[0].id if chefs else None
+            },
+            {
+                'name': 'Pasta Carbonara',
+                'description': 'Creamy pasta with bacon, eggs, and parmesan cheese',
+                'price': 14.99,
+                'category': 'main',
+                'flavor_tags': ['savory'],
+                'image': 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400&h=300&fit=crop',
+                'chef_id': chefs[1].id if len(chefs) > 1 else chefs[0].id if chefs else None
+            },
+            {
+                'name': 'New York Cheesecake',
+                'description': 'Rich and creamy classic New York style cheesecake with berry compote',
+                'price': 7.99,
+                'category': 'desserts',
+                'flavor_tags': ['sweet'],
+                'image': 'https://images.unsplash.com/photo-1524351199678-941a58a3df50?w=400&h=300&fit=crop',
+                'chef_id': chefs[1].id if len(chefs) > 1 else chefs[0].id if chefs else None
+            },
+            {
+                'name': 'Tiramisu',
+                'description': 'Classic Italian dessert with coffee-soaked ladyfingers and mascarpone',
+                'price': 8.99,
+                'category': 'desserts',
+                'flavor_tags': ['sweet'],
+                'image': 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400&h=300&fit=crop',
+                'chef_id': chefs[1].id if len(chefs) > 1 else chefs[0].id if chefs else None
+            },
+            {
+                'name': 'Apple Pie',
+                'description': 'Homemade apple pie with cinnamon and a flaky crust, served with vanilla ice cream',
+                'price': 6.99,
+                'category': 'desserts',
+                'flavor_tags': ['sweet'],
+                'image': 'https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=400&h=300&fit=crop',
+                'chef_id': chefs[0].id if chefs else None
+            },
+            {
+                'name': 'Iced Coffee',
+                'description': 'Chilled coffee with ice, served with cream and sugar on the side',
+                'price': 4.99,
+                'category': 'beverages',
+                'flavor_tags': [],
+                'image': 'https://images.unsplash.com/photo-1517487881594-2787fef5ebf7?w=400&h=300&fit=crop',
+                'chef_id': chefs[0].id if chefs else None
+            },
+            {
+                'name': 'Fresh Lemonade',
+                'description': 'Freshly squeezed lemonade with a hint of mint',
+                'price': 3.99,
+                'category': 'beverages',
+                'flavor_tags': ['tangy', 'sweet'],
+                'image': 'https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&w=400&h=300&q=80',
+                'chef_id': chefs[0].id if chefs else None
+            },
+            {
+                'name': 'Orange Juice',
+                'description': 'Freshly squeezed orange juice, served cold',
+                'price': 3.49,
+                'category': 'beverages',
+                'flavor_tags': ['tangy', 'sweet'],
+                'image': 'https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&w=400&h=300&q=80',
+                'chef_id': chefs[0].id if chefs else None
+            },
+            {
+                'name': 'BBQ Ribs',
+                'description': 'Slow-cooked pork ribs with our signature BBQ sauce',
+                'price': 19.99,
+                'category': 'main',
+                'flavor_tags': ['savory', 'spicy'],
+                'image': 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&h=300&fit=crop',
                 'chef_id': chefs[0].id if chefs else None
             }
         ]
