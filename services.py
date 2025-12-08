@@ -569,6 +569,12 @@ def get_featured_chefs(limit: int = 4) -> List[Dict]:
     chefs = [u for u in users if u.role == 'chef' and u.rating > 0]
     chefs.sort(key=lambda x: x.rating, reverse=True)
     
+    # Chef avatar mapping - using cartoon-style placeholder avatars
+    chef_avatars = {
+        'chef1': 'https://api.dicebear.com/7.x/avataaars/svg?seed=chef1&backgroundColor=b6e3f4,c0aede,ffd5dc,ffdfbf',
+        'chef2': 'https://api.dicebear.com/7.x/avataaars/svg?seed=chef2&backgroundColor=b6e3f4,c0aede,ffd5dc,ffdfbf'
+    }
+    
     result = []
     for chef in chefs[:limit]:
         dishes = [d for d in get_all_dishes() if d.chef_id == chef.id]
@@ -579,7 +585,7 @@ def get_featured_chefs(limit: int = 4) -> List[Dict]:
             'rating': chef.rating,
             'dishes_count': len(dishes),
             'orders_count': sum(d.orders_count for d in dishes),
-            'image': f'/static/images/chefs/{chef.id}.png'
+            'image': chef_avatars.get(chef.id, f'/static/images/chefs/{chef.id}.png')
         })
     
     return result
