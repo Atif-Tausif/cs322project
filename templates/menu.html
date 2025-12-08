@@ -65,10 +65,10 @@
             </div>
         </div>
         
-        <!-- Flavor Profile Filter (VIP Only) -->
-        {% if session.user and session.user.role == 'vip' %}
+        <!-- Flavor Profile Filter (All Customers) -->
+        {% if session.user and session.user.role in ['customer', 'vip'] %}
         <div class="mb-3">
-            <strong><i class="fas fa-star text-warning"></i> VIP Flavor Matching:</strong>
+            <strong><i class="fas fa-star text-warning"></i> Flavor Profile Filter:</strong>
             <div class="btn-group flex-wrap" role="group">
                 <button type="button" class="btn btn-outline-warning filter-btn" data-flavor="spicy">
                     <i class="fas fa-fire"></i> Spicy
@@ -228,10 +228,24 @@ $(document).ready(function() {
      * Load dishes from API
      */
     function loadDishes() {
+        // Prepare data for AJAX - handle flavor array properly
+        const ajaxData = {};
+        for (let key in currentFilters) {
+            if (currentFilters[key] !== null && currentFilters[key] !== undefined) {
+                if (Array.isArray(currentFilters[key])) {
+                    // Send array as multiple parameters with same key
+                    ajaxData[key] = currentFilters[key];
+                } else {
+                    ajaxData[key] = currentFilters[key];
+                }
+            }
+        }
+        
         $.ajax({
             url: '/api/v1/menu',
             method: 'GET',
-            data: currentFilters,
+            data: ajaxData,
+            traditional: true, // Use traditional serialization for arrays
             beforeSend: function() {
                 $('#dishesGrid').html(`
                     <div class="col-12 text-center py-5">

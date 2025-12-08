@@ -178,8 +178,16 @@
                                 {% if complaint.disputed %}
                                 <span class="badge bg-warning">Disputed</span>
                                 {% endif %}
-                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#resolveModal{{ complaint.id }}">
-                                    Resolve
+                                <button class="btn btn-sm btn-outline-primary" 
+                                        data-complaint-id="{{ complaint.id }}"
+                                        data-complainant="{{ complaint.complainant_name or 'Unknown' }}"
+                                        data-target="{{ complaint.target_name or 'Unknown' }}"
+                                        data-target-type="{{ complaint.target_type }}"
+                                        data-complaint-type="{{ complaint.complaint_type }}"
+                                        data-description="{{ complaint.description|replace('"', '&quot;')|replace("'", '&#39;') }}"
+                                        data-disputed="{{ 1 if complaint.disputed else 0 }}"
+                                        onclick="showResolveComplaintModalFromButton(this)">
+                                    <i class="fas fa-gavel"></i> Resolve
                                 </button>
                             </td>
                         </tr>
@@ -247,7 +255,7 @@
                             <h5 class="modal-title">Accept Delivery Bid</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <form method="POST" action="{{ url_for('main.manager_accept_bid') }}">
+                        <form id="acceptBidForm{{ bid.id }}" class="accept-bid-form">
                             <input type="hidden" name="order_id" value="{{ item.order.id }}">
                             <input type="hidden" name="bid_id" value="{{ bid.id }}">
                             <div class="modal-body">
@@ -265,10 +273,16 @@
                                 {% else %}
                                 <input type="hidden" name="memo" value="">
                                 {% endif %}
+                                <div id="acceptBidMessage{{ bid.id }}" class="mt-2"></div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="submit" class="btn btn-primary">Accept Bid</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <span class="btn-text">Accept Bid</span>
+                                    <span class="btn-loading" style="display: none;">
+                                        <i class="fas fa-spinner fa-spin"></i> Processing...
+                                    </span>
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -375,44 +389,58 @@
     </div>
     {% endif %}
     
-    <!-- Hire New Employee -->
+    <!-- Manage Accounts -->
     <div class="card mb-4">
         <div class="card-header">
-            <h5><i class="fas fa-user-plus"></i> Hire New Employee</h5>
-            <small class="text-muted">Customers, VIPs, and fired employees can be hired as chefs or delivery personnel</small>
+            <h5><i class="fas fa-users"></i> Manage Accounts</h5>
+            <small class="text-muted">Manage all user accounts including customers, VIPs, and employees</small>
         </div>
         <div class="card-body">
-            {% if available_for_hire %}
+            {% if all_users %}
             <div class="table-responsive">
                 <table class="table">
                     <thead>
                         <tr>
                             <th>Username</th>
-                            <th>Current Role</th>
-                            <th>Status</th>
+                            <th>Role</th>
                             <th>Email</th>
+                            <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for user in available_for_hire %}
+                        {% for user in all_users %}
                         <tr>
                             <td>{{ user.username }}</td>
                             <td>
                                 <span class="badge bg-secondary">{{ user.role|title }}</span>
                             </td>
-                            <td>
-                                {% if user.approved %}
-                                <span class="badge bg-success">Approved</span>
-                                {% else %}
-                                <span class="badge bg-warning">Pending Approval</span>
-                                {% endif %}
-                            </td>
                             <td>{{ user.email or 'N/A' }}</td>
                             <td>
-                                <button class="btn btn-sm btn-success" onclick="showHireModal('{{ user.id }}', '{{ user.username }}', '{{ user.role }}', {{ 1 if user.approved else 0 }})">
-                                    <i class="fas fa-user-plus"></i> Hire
-                                </button>
+                                {% if user.blacklisted %}
+                                <span class="badge bg-danger">Blacklisted</span>
+                                {% elif user.role in ['chef', 'delivery'] %}
+                                    {% if user.approved %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                    {% endif %}
+                                {% elif user.role in ['customer', 'vip'] %}
+                                    {% if user.approved %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Pending Approval</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="badge bg-secondary">{{ 'Active' if user.approved else 'Inactive' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" onclick="showAccountModal('{{ user.id }}', '{{ user.username }}', '{{ user.role }}', '{{ 1 if user.approved else 0 }}', '{{ 1 if user.blacklisted else 0 }}')">
+                                        <i class="fas fa-edit"></i> Manage
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -420,7 +448,7 @@
                 </table>
             </div>
             {% else %}
-            <p class="text-muted">No users available for hiring. All eligible users are already employees.</p>
+            <p class="text-muted">No users found</p>
             {% endif %}
         </div>
     </div>
@@ -483,36 +511,58 @@
     </div>
 </div>
 
-<!-- Hire Employee Modal -->
-<div class="modal fade" id="hireModal" tabindex="-1">
+<!-- Account Management Modal -->
+<div class="modal fade" id="accountModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Hire Employee: <span id="hireUserName"></span></h5>
+                <h5 class="modal-title">Manage Account: <span id="accountUserName"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <input type="hidden" id="hireUserId">
-                <div class="alert alert-info" id="hireApprovalWarning" style="display: none;">
-                    <i class="fas fa-info-circle"></i> This user is not yet approved. They will be automatically approved when hired as an employee.
-                </div>
+                <input type="hidden" id="accountUserId">
+                <input type="hidden" id="accountUserRole">
                 <div class="mb-3">
+                    <label class="form-label">Action</label>
+                    <select class="form-select" id="accountAction" onchange="updateAccountForm()">
+                        <option value="approve">Approve Account</option>
+                        <option value="hire">Hire as Employee</option>
+                        <option value="blacklist">Blacklist User</option>
+                        <option value="unblacklist">Remove Blacklist</option>
+                        <option value="close">Close Account</option>
+                    </select>
+                </div>
+                <div class="mb-3" id="accountRoleGroup" style="display: none;">
                     <label class="form-label">Role</label>
-                    <select class="form-select" id="hireRole">
+                    <select class="form-select" id="accountRole">
                         <option value="chef">Chef</option>
                         <option value="delivery">Delivery</option>
                     </select>
                     <small class="form-text text-muted">Note: Maximum 2 active employees per role</small>
                 </div>
-                <div class="mb-3">
+                <div class="mb-3" id="accountSalaryGroup" style="display: none;">
                     <label class="form-label">Initial Salary ($)</label>
-                    <input type="number" class="form-control" id="hireSalary" step="0.01" min="0" value="5000.00">
+                    <input type="number" class="form-control" id="accountSalary" step="0.01" min="0" value="5000.00">
                     <small class="form-text text-muted">Default: $5000 for Chef, $3000 for Delivery</small>
+                </div>
+                <div class="mb-3" id="accountBlacklistGroup" style="display: none;">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="accountBlacklist">
+                        <label class="form-check-label" for="accountBlacklist">
+                            Blacklist this user (prevent future registration)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="accountRefundBalance">
+                        <label class="form-check-label" for="accountRefundBalance">
+                            Refund balance when closing account
+                        </label>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="submitHire()">Hire Employee</button>
+                <button type="button" class="btn btn-primary" onclick="submitAccountAction()">Submit</button>
             </div>
         </div>
     </div>
@@ -586,30 +636,29 @@
 </div>
 
 <!-- Resolve Complaint Modal -->
-{% for complaint in pending_complaints %}
-<div class="modal fade" id="resolveModal{{ complaint.id }}" tabindex="-1">
+<div class="modal fade" id="resolveComplaintModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Resolve Complaint</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('main.manager_resolve_complaint', complaint_id=complaint.id) }}">
+            <form id="resolveComplaintForm">
+                <input type="hidden" id="resolveComplaintId" name="complaint_id">
                 <div class="modal-body">
-                    <p><strong>From:</strong> {{ complaint.complainant_name or 'Unknown' }}</p>
-                    <p><strong>Against:</strong> {{ complaint.target_name or 'Unknown' }} ({{ complaint.target_type|title }})</p>
-                    <p><strong>Description:</strong> {{ complaint.description }}</p>
-                    {% if complaint.disputed %}
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle"></i> This complaint has been disputed by {{ complaint.target_name or 'the target' }}.
+                    <p><strong>From:</strong> <span id="resolveComplainantName"></span></p>
+                    <p><strong>Against:</strong> <span id="resolveTargetName"></span> (<span id="resolveTargetType"></span>)</p>
+                    <p><strong>Description:</strong> <span id="resolveDescription"></span></p>
+                    <div class="alert alert-warning" id="resolveDisputedWarning" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i> This complaint has been disputed by the target.
                     </div>
-                    {% endif %}
                     <div class="mb-3">
                         <label class="form-label">Resolution</label>
-                        <select class="form-select" name="resolution" required>
-                            <option value="upheld">Upheld ({{ complaint.complaint_type|title }} is valid - {% if complaint.complaint_type == 'complaint' %}target gets warning{% else %}target benefits{% endif %})</option>
-                            <option value="dismissed">Dismissed ({{ complaint.complaint_type|title }} is false - complainant gets warning)</option>
+                        <select class="form-select" name="resolution" required id="resolveComplaintResolution" onchange="updateResolveComplaintInfo()">
+                            <option value="carry_out">Carry Out (Complaint is valid)</option>
+                            <option value="overrule">Overrule (Complaint is false)</option>
                         </select>
+                        <div id="resolveComplaintInfo" class="mt-2"></div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -620,201 +669,444 @@
         </div>
     </div>
 </div>
-{% endfor %}
+{% endblock %}
 
+{% block extra_js %}
 <script>
-function updateOrderStatus(orderId, newStatus) {
-    if (!confirm(`Update order status to ${newStatus}?`)) {
-        return;
+// Make all functions globally accessible and ensure jQuery is available
+(function() {
+    function initManagerDashboard() {
+        if (typeof jQuery === 'undefined') {
+            console.log('jQuery not loaded yet, retrying...');
+            setTimeout(initManagerDashboard, 100);
+            return;
+        }
+        
+        const $ = jQuery;
+        
+        // Make all functions globally accessible
+        window.updateOrderStatus = function(orderId, newStatus) {
+            if (!confirm(`Update order status to ${newStatus}?`)) {
+                return;
+            }
+            
+            $.ajax({
+                url: '/api/v1/order/update-status',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    order_id: orderId,
+                    status: newStatus
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        location.reload();
+                    } else {
+                        alert(response.message || 'Failed to update order status');
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Error updating order status:', xhr);
+                    alert('Error updating order status');
+                }
+            });
+        };
+        
+        window.showAccountModal = function(userId, userName, currentRole, isApproved, isBlacklisted) {
+            $('#accountUserId').val(userId);
+            $('#accountUserName').text(userName);
+            $('#accountUserRole').val(currentRole);
+            $('#accountAction').val('approve');
+            window.updateAccountForm();
+            $('#accountModal').modal('show');
+        };
+        
+        window.updateAccountForm = function() {
+            const action = $('#accountAction').val();
+            const currentRole = $('#accountUserRole').val();
+            
+            // Hide all optional groups
+            $('#accountRoleGroup').hide();
+            $('#accountSalaryGroup').hide();
+            $('#accountBlacklistGroup').hide();
+            
+            if (action === 'hire') {
+                $('#accountRoleGroup').show();
+                $('#accountSalaryGroup').show();
+                $('#accountRole').val('chef');
+                $('#accountSalary').val('5000.00');
+            } else if (action === 'close') {
+                $('#accountBlacklistGroup').show();
+            }
+        };
+        
+        window.submitAccountAction = function() {
+            const userId = $('#accountUserId').val();
+            const action = $('#accountAction').val();
+            const role = $('#accountRole').val();
+            const salary = parseFloat($('#accountSalary').val()) || 0;
+            const blacklist = $('#accountBlacklist').is(':checked');
+            const refundBalance = $('#accountRefundBalance').is(':checked');
+            
+            const data = {
+                user_id: userId,
+                action: action
+            };
+            
+            if (action === 'hire') {
+                if (!role) {
+                    alert('Please select a role');
+                    return;
+                }
+                data.role = role;
+                data.amount = salary;
+            } else if (action === 'close') {
+                data.blacklist = blacklist;
+                data.refund_balance = refundBalance;
+            }
+            
+            $.ajax({
+                url: '/manager/account/manage',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        $('#accountModal').modal('hide');
+                        location.reload();
+                    } else {
+                        alert(response.message || 'Failed to perform action');
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Error performing account action:', xhr);
+                    const errorMsg = xhr.responseJSON?.message || 'Error performing action';
+                    alert(errorMsg);
+                }
+            });
+        };
+        
+        window.showHRModal = function(empId, empName, empRole, empSalary, isActive) {
+            $('#hrEmployeeId').val(empId);
+            $('#hrEmployeeName').text(empName);
+            $('#hrRole').val(empRole);
+            $('#hrAmount').val('');
+            window.updateHRForm();
+            $('#hrModal').modal('show');
+        };
+        
+        window.updateHRForm = function() {
+            const action = $('#hrAction').val();
+            
+            if (action === 'fire') {
+                $('#hrAmountGroup').hide();
+                $('#hrRoleGroup').hide();
+            } else if (action === 'hire') {
+                $('#hrAmountGroup').hide();
+                $('#hrRoleGroup').show();
+            } else {
+                $('#hrAmountGroup').show();
+                $('#hrRoleGroup').hide();
+                if (action === 'set_salary') {
+                    $('#hrAmountLabel').text('Salary Amount ($)');
+                    $('#hrAmountHelp').text('Enter the new salary amount in dollars');
+                } else if (action === 'raise') {
+                    $('#hrAmountLabel').text('Raise Amount');
+                    $('#hrAmountHelp').text('Enter amount in dollars or percentage (0.1 = 10% raise)');
+                } else if (action === 'cut') {
+                    $('#hrAmountLabel').text('Cut Amount');
+                    $('#hrAmountHelp').text('Enter amount in dollars or percentage (0.1 = 10% cut)');
+                }
+            }
+        };
+        
+        window.submitHRAction = function() {
+            const empId = $('#hrEmployeeId').val();
+            const action = $('#hrAction').val();
+            const amount = parseFloat($('#hrAmount').val()) || 0;
+            const role = $('#hrRole').val();
+            
+            const data = {
+                employee_id: empId,
+                action: action,
+                amount: amount
+            };
+            
+            if (action === 'hire') {
+                data.role = role;
+            }
+            
+            $.ajax({
+                url: '/manager/hr/update',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        $('#hrModal').modal('hide');
+                        location.reload();
+                    } else {
+                        alert(response.message || 'Failed to update employee');
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Error updating employee:', xhr);
+                    alert('Error updating employee');
+                }
+            });
+        };
+        
+        window.showCloseAccountModal = function(userId) {
+            $('#closeAccountUserId').val(userId);
+            $('#closeAccountBlacklist').prop('checked', false);
+            $('#closeAccountModal').modal('show');
+        };
+        
+        window.submitCloseAccount = function() {
+            const userId = $('#closeAccountUserId').val();
+            const blacklist = $('#closeAccountBlacklist').is(':checked');
+            
+            $.ajax({
+                url: '/manager/account/close',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    user_id: userId,
+                    blacklist: blacklist
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        $('#closeAccountModal').modal('hide');
+                        location.reload();
+                    } else {
+                        alert(response.message || 'Failed to close account');
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Error closing account:', xhr);
+                    alert('Error closing account');
+                }
+            });
+        };
+        
+        window.showResolveComplaintModalFromButton = function(button) {
+            const complaintId = $(button).data('complaint-id');
+            const complainantName = $(button).data('complainant');
+            const targetName = $(button).data('target');
+            const targetType = $(button).data('target-type');
+            const complaintType = $(button).data('complaint-type');
+            const description = $(button).data('description');
+            const isDisputed = $(button).data('disputed');
+            
+            window.showResolveComplaintModal(complaintId, complainantName, targetName, targetType, complaintType, description, isDisputed);
+        };
+        
+        window.showResolveComplaintModal = function(complaintId, complainantName, targetName, targetType, complaintType, description, isDisputed) {
+            $('#resolveComplaintId').val(complaintId);
+            $('#resolveComplainantName').text(complainantName || 'Unknown');
+            $('#resolveTargetName').text(targetName || 'Unknown');
+            $('#resolveTargetType').text(targetType || 'Unknown');
+            $('#resolveDescription').text(description || '');
+            $('#resolveComplaintResolution').val('carry_out');
+            
+            if (isDisputed == '1' || isDisputed === 1) {
+                $('#resolveDisputedWarning').show();
+            } else {
+                $('#resolveDisputedWarning').hide();
+            }
+            
+            // Store for use in update function
+            $('#resolveComplaintModal').data('targetType', targetType);
+            $('#resolveComplaintModal').data('complaintType', complaintType);
+            $('#resolveComplaintModal').data('complainantName', complainantName);
+            
+            window.updateResolveComplaintInfo();
+            $('#resolveComplaintModal').modal('show');
+        };
+        
+        window.updateResolveComplaintInfo = function() {
+            const resolution = $('#resolveComplaintResolution').val();
+            const targetType = $('#resolveComplaintModal').data('targetType');
+            const complaintType = $('#resolveComplaintModal').data('complaintType');
+            const complainantName = $('#resolveComplaintModal').data('complainantName');
+            const infoDiv = $('#resolveComplaintInfo');
+            
+            if (resolution === 'carry_out') {
+                if (complaintType === 'complaint') {
+                    if (targetType === 'chef' || targetType === 'delivery') {
+                        infoDiv.html('<div class="alert alert-info"><i class="fas fa-info-circle"></i> <strong>If carried out:</strong> The complaint will remain on the employee\'s record and affect their performance evaluation. This may impact their salary and employment status.</div>');
+                    } else {
+                        infoDiv.html('<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> <strong>If carried out:</strong> The target will receive a warning. Multiple warnings may result in account restrictions.</div>');
+                    }
+                } else {
+                    infoDiv.html('<div class="alert alert-success"><i class="fas fa-check-circle"></i> <strong>If carried out:</strong> The target will benefit from this compliment.</div>');
+                }
+            } else {
+                // Overrule
+                infoDiv.html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> <strong>If overruled:</strong> ' + (complainantName || 'The complainant') + ' will receive a warning (if customer/VIP) or complaint (if employee). The complaint will be removed from the target\'s record (complaint -1).</div>');
+            }
+        };
+        
+        // Set up accept bid form handler FIRST (before document.ready) using event delegation
+        // This ensures it works even if modals are created dynamically
+        console.log('Setting up accept bid form handler');
+        $(document).on('submit', '.accept-bid-form', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('Accept bid form submitted!');
+                
+                const form = $(this);
+                const formId = form.attr('id');
+                console.log('Form ID:', formId);
+                
+                if (!formId || !formId.startsWith('acceptBidForm')) {
+                    console.error('Invalid form ID:', formId);
+                    alert('Error: Invalid form');
+                    return false;
+                }
+                
+                const bidId = formId.replace('acceptBidForm', '');
+                const messageDiv = $('#acceptBidMessage' + bidId);
+                const submitBtn = form.find('button[type="submit"]');
+                const btnText = submitBtn.find('.btn-text');
+                const btnLoading = submitBtn.find('.btn-loading');
+                
+                const orderId = form.find('input[name="order_id"]').val();
+                const bidIdValue = form.find('input[name="bid_id"]').val();
+                const memo = form.find('textarea[name="memo"], input[name="memo"]').val() || '';
+                
+                console.log('Accepting bid:', { orderId, bidId: bidIdValue, memo });
+                
+                if (!orderId || !bidIdValue) {
+                    console.error('Missing required fields:', { orderId, bidId: bidIdValue });
+                    messageDiv.html('<div class="alert alert-danger">Missing required information.</div>');
+                    return false;
+                }
+                
+                // Check if memo is required (not the lowest bid)
+                const memoField = form.find('textarea[name="memo"]');
+                if (memoField.length > 0 && memoField.prop('required') && !memo.trim()) {
+                    messageDiv.html('<div class="alert alert-danger">Memo is required for non-lowest bids.</div>');
+                    return false;
+                }
+                
+                // Disable button and show loading
+                submitBtn.prop('disabled', true);
+                if (btnText.length) btnText.hide();
+                if (btnLoading.length) btnLoading.show();
+                messageDiv.html('');
+                
+                // Submit using form data (the route expects form data, not JSON)
+                const formData = new FormData();
+                formData.append('order_id', orderId);
+                formData.append('bid_id', bidIdValue);
+                formData.append('memo', memo);
+                
+                console.log('Submitting bid acceptance...');
+                
+                fetch('/manager/delivery/accept', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    console.log('Accept bid response status:', response.status, 'redirected:', response.redirected);
+                    if (response.redirected || response.ok) {
+                        // The route redirects, so reload the page
+                        console.log('Bid accepted successfully, reloading page...');
+                        location.reload();
+                    } else {
+                        return response.text().then(text => {
+                            console.error('Error response:', text);
+                            messageDiv.html('<div class="alert alert-danger">Error accepting bid. Please try again.</div>');
+                            submitBtn.prop('disabled', false);
+                            if (btnText.length) btnText.show();
+                            if (btnLoading.length) btnLoading.hide();
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    messageDiv.html('<div class="alert alert-danger">Error accepting bid. Please try again.</div>');
+                    submitBtn.prop('disabled', false);
+                    if (btnText.length) btnText.show();
+                    if (btnLoading.length) btnLoading.hide();
+                });
+                
+                return false;
+        });
+        
+        console.log('Accept bid form handler registered');
+        
+        // Initialize other event handlers
+        $(document).ready(function() {
+            console.log('Manager dashboard initialized');
+            
+            // Account role change handler
+            $('#accountRole').on('change', function() {
+                const role = $(this).val();
+                if (role === 'chef') {
+                    $('#accountSalary').val('5000.00');
+                } else {
+                    $('#accountSalary').val('3000.00');
+                }
+            });
+            
+            // Complaint resolution form handler
+            $('#resolveComplaintForm').on('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const complaintId = $('#resolveComplaintId').val();
+                const resolution = $('#resolveComplaintResolution').val();
+                
+                console.log('Resolving complaint:', complaintId, resolution);
+                
+                if (!complaintId || !resolution) {
+                    alert('Please select a resolution');
+                    return false;
+                }
+                
+                // Submit using form data (the route expects form data, not JSON)
+                const formData = new FormData();
+                formData.append('resolution', resolution);
+                
+                fetch('/manager/complaint/resolve/' + complaintId, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    console.log('Response status:', response.status, 'redirected:', response.redirected);
+                    if (response.redirected || response.ok) {
+                        // The route redirects, so reload the page
+                        location.reload();
+                    } else {
+                        return response.text().then(text => {
+                            console.error('Error response:', text);
+                            alert('Error resolving complaint. Please try again.');
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error resolving complaint. Please try again.');
+                });
+                
+                return false;
+            });
+        });
     }
     
-    $.ajax({
-        url: '/api/v1/order/update-status',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({
-            order_id: orderId,
-            status: newStatus
-        }),
-        success: function(response) {
-            if (response.success) {
-                alert(response.message);
-                location.reload();
-            } else {
-                alert(response.message || 'Failed to update order status');
-            }
-        },
-        error: function() {
-            alert('Error updating order status');
-        }
-    });
-}
-
-function showHireModal(userId, userName, currentRole, isApproved) {
-    $('#hireUserId').val(userId);
-    $('#hireUserName').text(userName);
-    $('#hireRole').val('chef'); // Default to chef
-    $('#hireSalary').val('5000.00');
-    
-    // Show warning if user is not approved yet
-    if (!isApproved) {
-        $('#hireApprovalWarning').show();
+    // Start initialization
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initManagerDashboard);
     } else {
-        $('#hireApprovalWarning').hide();
+        initManagerDashboard();
     }
-    
-    $('#hireModal').modal('show');
-}
-
-function submitHire() {
-    const userId = $('#hireUserId').val();
-    const role = $('#hireRole').val();
-    const salary = parseFloat($('#hireSalary').val()) || 0;
-    
-    if (!userId || !role) {
-        alert('Please fill in all fields');
-        return;
-    }
-    
-    $.ajax({
-        url: '/manager/hr/update',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({
-            employee_id: userId,
-            action: 'hire',
-            role: role,
-            amount: salary
-        }),
-        success: function(response) {
-            if (response.success) {
-                alert(response.message);
-                $('#hireModal').modal('hide');
-                location.reload();
-            } else {
-                alert(response.message || 'Failed to hire employee');
-            }
-        },
-        error: function(xhr) {
-            const errorMsg = xhr.responseJSON?.message || 'Error hiring employee';
-            alert(errorMsg);
-        }
-    });
-}
-
-$(document).ready(function() {
-    $('#hireRole').on('change', function() {
-        const role = $(this).val();
-        if (role === 'chef') {
-            $('#hireSalary').val('5000.00');
-        } else {
-            $('#hireSalary').val('3000.00');
-        }
-    });
-});
-
-function showHRModal(empId, empName, empRole, empSalary, isActive) {
-    $('#hrEmployeeId').val(empId);
-    $('#hrEmployeeName').text(empName);
-    $('#hrRole').val(empRole);
-    $('#hrAmount').val('');
-    updateHRForm();
-    $('#hrModal').modal('show');
-}
-
-function updateHRForm() {
-    const action = $('#hrAction').val();
-    const isActive = parseInt($('#hrEmployeeId').closest('tr').find('td:eq(7)').text().includes('Active'));
-    
-    if (action === 'fire') {
-        $('#hrAmountGroup').hide();
-        $('#hrRoleGroup').hide();
-    } else if (action === 'hire') {
-        $('#hrAmountGroup').hide();
-        $('#hrRoleGroup').show();
-    } else {
-        $('#hrAmountGroup').show();
-        $('#hrRoleGroup').hide();
-        if (action === 'set_salary') {
-            $('#hrAmountLabel').text('Salary Amount ($)');
-            $('#hrAmountHelp').text('Enter the new salary amount in dollars');
-        } else if (action === 'raise') {
-            $('#hrAmountLabel').text('Raise Amount');
-            $('#hrAmountHelp').text('Enter amount in dollars or percentage (0.1 = 10% raise)');
-        } else if (action === 'cut') {
-            $('#hrAmountLabel').text('Cut Amount');
-            $('#hrAmountHelp').text('Enter amount in dollars or percentage (0.1 = 10% cut)');
-        }
-    }
-}
-
-function submitHRAction() {
-    const empId = $('#hrEmployeeId').val();
-    const action = $('#hrAction').val();
-    const amount = parseFloat($('#hrAmount').val()) || 0;
-    const role = $('#hrRole').val();
-    
-    const data = {
-        employee_id: empId,
-        action: action,
-        amount: amount
-    };
-    
-    if (action === 'hire') {
-        data.role = role;
-    }
-    
-    $.ajax({
-        url: '/manager/hr/update',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(data),
-        success: function(response) {
-            if (response.success) {
-                alert(response.message);
-                $('#hrModal').modal('hide');
-                location.reload();
-            } else {
-                alert(response.message || 'Failed to update employee');
-            }
-        },
-        error: function() {
-            alert('Error updating employee');
-        }
-    });
-}
-
-function showCloseAccountModal(userId) {
-    $('#closeAccountUserId').val(userId);
-    $('#closeAccountBlacklist').prop('checked', false);
-    $('#closeAccountModal').modal('show');
-}
-
-function submitCloseAccount() {
-    const userId = $('#closeAccountUserId').val();
-    const blacklist = $('#closeAccountBlacklist').is(':checked');
-    
-    $.ajax({
-        url: '/manager/account/close',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({
-            user_id: userId,
-            blacklist: blacklist
-        }),
-        success: function(response) {
-            if (response.success) {
-                alert(response.message);
-                $('#closeAccountModal').modal('hide');
-                location.reload();
-            } else {
-                alert(response.message || 'Failed to close account');
-            }
-        },
-        error: function() {
-            alert('Error closing account');
-        }
-    });
-}
+})();
 </script>
 {% endblock %}

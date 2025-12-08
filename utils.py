@@ -60,24 +60,24 @@ def calculate_discount(user, total: float) -> float:
         return total * (AppConfig.VIP_DISCOUNT_PERCENT / 100)
     return 0.0
 
-def calculate_flavor_match(user_flavor_profile: dict, dish_flavor_tags: list) -> float:
-    """Calculate flavor match percentage between user profile and dish tags"""
+def calculate_flavor_match(user_flavor_preferences: dict, dish_flavor_tags: list) -> float:
+    """
+    Calculate flavor match percentage between user preferences and dish tags
+    Uses percentages additively - if dish has savory (90%) and sweet (10%), match is 100%
+    """
     if not dish_flavor_tags:
         return 0.0
     
-    total_score = 0.0
-    max_score = 0.0
+    # Sum up the percentages for all flavor tags in the dish
+    total_match = 0.0
     
     for tag in dish_flavor_tags:
-        user_score = user_flavor_profile.get(tag, 0)
-        total_score += user_score
-        max_score += 10  # Assuming max score per tag is 10
+        if tag in user_flavor_preferences:
+            # Add the percentage preference for this flavor
+            total_match += user_flavor_preferences[tag]
     
-    if max_score == 0:
-        return 0.0
-    
-    match_percentage = (total_score / max_score) * 100
-    return min(100.0, max(0.0, match_percentage))
+    # Cap at 100%
+    return min(100.0, max(0.0, total_match))
 
 def update_user_flavor_profile(user, dish_flavor_tags: list, rating: int):
     """Update user's flavor profile based on dish rating"""

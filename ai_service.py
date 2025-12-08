@@ -181,11 +181,14 @@ def get_personalized_recommendations(user_id: str, limit: int = 6) -> List[Dict]
         
         match_score = 0.0
         
-        # Flavor profile matching
+        # Flavor profile matching - use preferences from order history
         if dish.flavor_tags:
-            match_score = calculate_flavor_match(user.flavor_profile, dish.flavor_tags)
+            from ai_service import get_flavor_preferences_from_orders
+            flavor_preferences = get_flavor_preferences_from_orders(user_id)
+            match_score = calculate_flavor_match(flavor_preferences, dish.flavor_tags)
         
         # Boost based on order history (if user ordered similar dishes)
+        # Note: These boosts are applied as percentage points, but we cap at 100%
         if user_orders:
             ordered_dish_ids = set()
             for order in user_orders:
@@ -203,6 +206,9 @@ def get_personalized_recommendations(user_id: str, limit: int = 6) -> List[Dict]
         if dish.rating >= 4.0:
             match_score += 5
         
+        # Cap match score at 100% (since it's a percentage)
+        match_score = min(100.0, match_score)
+        
         dish_dict = dish.to_dict()
         dish_dict['match_score'] = round(match_score, 1)
         recommendations.append(dish_dict)
@@ -210,6 +216,40 @@ def get_personalized_recommendations(user_id: str, limit: int = 6) -> List[Dict]
     # Sort by match score and return top recommendations
     recommendations.sort(key=lambda x: x['match_score'], reverse=True)
     return recommendations[:limit]
+
+def get_flavor_preferences_from_orders(user_id: str) -> Dict:
+    """
+    Calculate flavor preferences based on order history (percentage of orders with each flavor)
+    Returns a dictionary with flavor percentages
+    """
+    from database import get_orders_by_customer
+    from database import get_all_dishes
+    
+    orders = get_orders_by_customer(user_id)
+    if not orders:
+        return {'spicy': 0, 'sweet': 0, 'savory': 0, 'tangy': 0}
+    
+    dishes = {d.id: d for d in get_all_dishes()}
+    flavor_counts = {'spicy': 0, 'sweet': 0, 'savory': 0, 'tangy': 0}
+    total_items = 0
+    
+    for order in orders:
+        for item in order.items:
+            dish_id = item.get('dish_id')
+            dish = dishes.get(dish_id)
+            if dish and dish.flavor_tags:
+                total_items += 1
+                for flavor in dish.flavor_tags:
+                    if flavor in flavor_counts:
+                        flavor_counts[flavor] += 1
+    
+    # Calculate percentages
+    if total_items > 0:
+        flavor_percentages = {flavor: (count / total_items * 100) for flavor, count in flavor_counts.items()}
+    else:
+        flavor_percentages = {flavor: 0 for flavor in flavor_counts.keys()}
+    
+    return flavor_percentages
 
 def get_flavor_profile_analysis(user_id: str) -> Dict:
     """

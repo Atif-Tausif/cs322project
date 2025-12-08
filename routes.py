@@ -164,8 +164,23 @@ def profile():
     if user.role == 'vip':
         flavor_analysis = get_flavor_profile_analysis(user.id)
     
+    # Get flavor preferences from order history for all customers
+    flavor_preferences = None
+    if user.role in ['customer', 'vip']:
+        from ai_service import get_flavor_preferences_from_orders
+        flavor_preferences = get_flavor_preferences_from_orders(user.id)
+    
+    # Get chefs and delivery persons for complaint form (only for customers/VIPs)
+    chefs = []
+    delivery_persons = []
+    if user.role in ['customer', 'vip']:
+        all_users = get_all_users()
+        chefs = [u.to_dict() for u in all_users if u.role == 'chef' and u.approved]
+        delivery_persons = [u.to_dict() for u in all_users if u.role == 'delivery' and u.approved]
+    
     return render_template('profile.html', user=user, orders=orders[:10], 
-                         flavor_analysis=flavor_analysis, my_complaints=my_complaints)
+                         flavor_analysis=flavor_analysis, flavor_preferences=flavor_preferences,
+                         my_complaints=my_complaints, chefs=chefs, delivery_persons=delivery_persons)
 
 @bp.route('/orders')
 @require_login
@@ -319,7 +334,11 @@ def api_menu():
     search = request.args.get('search', '').lower()
     category = request.args.get('category', 'all')
     chef = request.args.get('chef', 'all')
-    flavor = request.args.get('flavor')
+    # Handle flavor as either single value or list (from query string)
+    flavor = request.args.getlist('flavor') or request.args.get('flavor')
+    # If single value, convert to list for consistency
+    if flavor and not isinstance(flavor, list):
+        flavor = [flavor] if flavor else None
     min_price = float(request.args.get('minPrice', 0))
     max_price = float(request.args.get('maxPrice', 100))
     sort = request.args.get('sort', 'popular')
@@ -354,9 +373,24 @@ def api_menu():
         if dish.vip_only and (not user or user.role != 'vip'):
             continue
         
-        # Flavor filter (VIP only)
-        if flavor and dish.flavor_tags and flavor not in dish.flavor_tags:
-            continue
+        # Flavor filter (all customers) - handle both single flavor and array of flavors
+        if flavor:
+            # Ensure flavor is a list
+            if isinstance(flavor, str):
+                flavor_list = [flavor]
+            elif isinstance(flavor, list):
+                flavor_list = flavor
+            else:
+                flavor_list = []
+            
+            # If dish has flavor tags, check if any of the selected flavors match
+            if dish.flavor_tags:
+                # Check if dish has ANY of the selected flavors
+                if not any(f in dish.flavor_tags for f in flavor_list):
+                    continue
+            else:
+                # Dish has no flavor tags, skip if filtering by flavors
+                continue
         
         filtered.append(dish)
     
@@ -379,12 +413,24 @@ def api_menu():
     end = start + per_page
     paginated = filtered[start:end]
     
-    # Add chef names
+    # Add chef names and flavor match scores
     chefs = {u.id: u.username for u in get_all_users() if u.role == 'chef'}
+    user = get_current_user()
+    flavor_preferences = None
+    if user and user.role in ['customer', 'vip']:
+        from ai_service import get_flavor_preferences_from_orders
+        from utils import calculate_flavor_match
+        flavor_preferences = get_flavor_preferences_from_orders(user.id)
+    
     dishes_dict = []
     for dish in paginated:
         dish_dict = dish.to_dict()
         dish_dict['chef_name'] = chefs.get(dish.chef_id, 'Unknown')
+        # Calculate flavor match if user has preferences
+        if flavor_preferences and dish.flavor_tags:
+            from utils import calculate_flavor_match
+            match_score = calculate_flavor_match(flavor_preferences, dish.flavor_tags)
+            dish_dict['match_score'] = round(match_score, 1)
         dishes_dict.append(dish_dict)
     
     return jsonify({
@@ -806,18 +852,8 @@ def manager_dashboard():
     # Get all employees for HR management
     employees = [u for u in users if u.role in ['chef', 'delivery']]
     
-    # Get users available for hiring:
-    # 1. Customers and VIPs (approved or not - can hire them as employees)
-    # 2. Fired employees (role changed to customer, approved=False)
-    # 3. Inactive employees (chef/delivery with approved=False)
-    # Exclude blacklisted users
-    available_for_hire = [
-        u for u in users 
-        if not u.blacklisted and (
-            (u.role in ['customer', 'vip']) or 
-            (u.role in ['chef', 'delivery'] and not u.approved)
-        )
-    ]
+    # Get all users for account management (exclude manager)
+    all_users = [u for u in users if u.role != 'manager']
     
     return render_template('manager/dashboard.html',
                          pending_users=pending_users,
@@ -828,7 +864,7 @@ def manager_dashboard():
                          flagged_kb=flagged_kb,
                          pending_kb=pending_kb,
                          employees=employees,
-                         available_for_hire=available_for_hire)
+                         all_users=all_users)
 
 @bp.route('/manager/approve/<user_id>', methods=['POST'])
 @require_login
@@ -858,8 +894,14 @@ def manager_reject_user(user_id):
 @require_role('manager')
 def manager_resolve_complaint(complaint_id):
     """Resolve a complaint"""
-    resolution = request.form.get('resolution')  # 'upheld' or 'dismissed'
+    resolution = request.form.get('resolution')  # 'carry_out' or 'overrule'
     manager_id = session.get('user_id')
+    
+    # Map new resolution types to old ones for backward compatibility
+    if resolution == 'carry_out':
+        resolution = 'upheld'
+    elif resolution == 'overrule':
+        resolution = 'dismissed'
     
     success, message = resolve_complaint(complaint_id, manager_id, resolution)
     if success:
@@ -868,6 +910,70 @@ def manager_resolve_complaint(complaint_id):
         flash(message, 'danger')
     
     return redirect(url_for('main.manager_dashboard'))
+
+@bp.route('/manager/account/manage', methods=['POST'])
+@require_login
+@require_role('manager')
+def manager_manage_account():
+    """Manage user account"""
+    data = request.get_json()
+    user_id = data.get('user_id')
+    action = data.get('action')
+    
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'})
+    
+    if action == 'approve':
+        user.approved = True
+        save_user(user)
+        return jsonify({'success': True, 'message': f'Account for {user.username} approved'})
+    
+    elif action == 'hire':
+        role = data.get('role')
+        salary = float(data.get('amount', 0))
+        
+        if role not in ['chef', 'delivery']:
+            return jsonify({'success': False, 'message': 'Invalid role'})
+        
+        # Check if we can hire (max 2 per role)
+        all_users = get_all_users()
+        active_employees = [u for u in all_users if u.role == role and u.approved]
+        if len(active_employees) >= 2:
+            return jsonify({'success': False, 'message': f'Maximum 2 active {role}s already hired'})
+        
+        user.role = role
+        user.approved = True
+        user.salary = salary
+        save_user(user)
+        return jsonify({'success': True, 'message': f'{user.username} hired as {role}'})
+    
+    elif action == 'blacklist':
+        user.blacklisted = True
+        save_user(user)
+        return jsonify({'success': True, 'message': f'{user.username} blacklisted'})
+    
+    elif action == 'unblacklist':
+        user.blacklisted = False
+        save_user(user)
+        return jsonify({'success': True, 'message': f'Blacklist removed for {user.username}'})
+    
+    elif action == 'close':
+        blacklist = data.get('blacklist', False)
+        refund_balance = data.get('refund_balance', False)
+        
+        # Refund balance if requested
+        if refund_balance and user.balance > 0:
+            # In a real system, you'd process the refund here
+            user.balance = 0  # For now, just zero it out
+        
+        user.approved = False
+        if blacklist:
+            user.blacklisted = True
+        save_user(user)
+        return jsonify({'success': True, 'message': f'Account for {user.username} closed'})
+    
+    return jsonify({'success': False, 'message': 'Invalid action'})
 
 @bp.route('/manager/knowledge/approve/<entry_id>', methods=['POST'])
 @require_login
@@ -1156,20 +1262,34 @@ def delivery_dashboard():
     
     # Get available orders
     orders = get_all_orders()
-    available_orders = [o for o in orders if o.status == 'ready']
+    available_orders = [o for o in orders if o.status == 'ready' and not o.delivery_person_id]
     
     # Get my bids
     from database import get_all_delivery_bids
     bids = get_all_delivery_bids()
     my_bids = [b for b in bids if b.delivery_person_id == user.id]
     
+    # Add my bid amount to each available order
+    for order in available_orders:
+        my_bid = next((b for b in my_bids if b.order_id == order.id and b.status == 'pending'), None)
+        order.my_bid = my_bid.bid_amount if my_bid else None
+    
     # Get my deliveries
     my_deliveries = [o for o in orders if o.delivery_person_id == user.id]
+    
+    # Get chefs, delivery persons, and customers for complaint form
+    all_users = get_all_users()
+    chefs = [u.to_dict() for u in all_users if u.role == 'chef' and u.approved]
+    delivery_persons = [u.to_dict() for u in all_users if u.role == 'delivery' and u.approved and u.id != user.id]
+    customers = [u.to_dict() for u in all_users if u.role in ['customer', 'vip'] and u.approved]
     
     return render_template('delivery/dashboard.html',
                          available_orders=available_orders,
                          my_bids=my_bids,
-                         my_deliveries=my_deliveries)
+                         my_deliveries=my_deliveries,
+                         chefs=chefs,
+                         delivery_persons=delivery_persons,
+                         customers=customers)
 
 @bp.route('/api/v1/delivery/bid', methods=['POST'])
 @require_login

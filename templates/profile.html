@@ -71,10 +71,59 @@
         </div>
         
         <div class="col-md-8">
+            <!-- Flavor Preferences (All Customers) -->
+            {% if user.role in ['customer', 'vip'] and flavor_preferences %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Flavor Preferences</h5>
+                    <small class="text-muted">Based on your order history</small>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Order History Analysis:</strong>
+                        <div class="mt-2">
+                            {% for flavor, percentage in flavor_preferences.items() %}
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <small>
+                                        {% if flavor == 'spicy' %}
+                                        <i class="fas fa-fire text-danger"></i> Spicy
+                                        {% elif flavor == 'sweet' %}
+                                        <i class="fas fa-cookie text-warning"></i> Sweet
+                                        {% elif flavor == 'savory' %}
+                                        <i class="fas fa-drumstick-bite text-primary"></i> Savory
+                                        {% elif flavor == 'tangy' %}
+                                        <i class="fas fa-lemon text-success"></i> Tangy
+                                        {% else %}
+                                        {{ flavor|title }}
+                                        {% endif %}
+                                    </small>
+                                    <small><strong>{{ percentage|round(1) }}%</strong></small>
+                                </div>
+                                <div class="progress" style="height: 25px;">
+                                    <div class="progress-bar 
+                                        {% if flavor == 'spicy' %}bg-danger
+                                        {% elif flavor == 'sweet' %}bg-warning
+                                        {% elif flavor == 'savory' %}bg-primary
+                                        {% elif flavor == 'tangy' %}bg-success
+                                        {% else %}bg-secondary{% endif %}" 
+                                        role="progressbar" 
+                                        style="width: {{ percentage|round(1) }}%">
+                                        {{ percentage|round(1) }}%
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
             {% if user.role == 'vip' and flavor_analysis %}
             <div class="card mb-4">
                 <div class="card-header">
-                    <h5><i class="fas fa-chart-pie"></i> Flavor Profile</h5>
+                    <h5><i class="fas fa-chart-pie"></i> Flavor Profile (VIP Analysis)</h5>
                 </div>
                 <div class="card-body">
                     {% if flavor_analysis.dominant_flavor %}
@@ -156,6 +205,43 @@
                 </div>
             </div>
             
+            <!-- File a Complaint Section -->
+            {% if user.role in ['customer', 'vip'] %}
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5><i class="fas fa-exclamation-circle"></i> File a Complaint</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Submit a complaint about a chef or delivery person. The manager will review your complaint and take appropriate action.</p>
+                    <form id="complaintForm">
+                        <div class="mb-3">
+                            <label for="complaintTargetType" class="form-label">Complain About</label>
+                            <select class="form-select" id="complaintTargetType" required onchange="updateComplaintTargets()">
+                                <option value="">Select type...</option>
+                                <option value="chef">Chef</option>
+                                <option value="delivery">Delivery Person</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="targetSelectGroup" style="display: none;">
+                            <label for="complaintTargetId" class="form-label">Select Person</label>
+                            <select class="form-select" id="complaintTargetId" required>
+                                <option value="">Select a person...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="complaintDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="complaintDescription" rows="4" 
+                                      placeholder="Please describe your complaint in detail..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-paper-plane"></i> Submit Complaint
+                        </button>
+                    </form>
+                    <div id="complaintMessage" class="mt-3"></div>
+                </div>
+            </div>
+            {% endif %}
+            
             <div class="card">
                 <div class="card-header">
                     <h5><i class="fas fa-receipt"></i> Recent Orders</h5>
@@ -198,12 +284,51 @@
 </div>
 
 <script>
-function disputeComplaint(complaintId) {
+// Store chefs and delivery persons data
+const chefsData = {{ chefs|tojson }};
+const deliveryPersonsData = {{ delivery_persons|tojson }};
+
+// Make updateComplaintTargets globally accessible
+window.updateComplaintTargets = function() {
+    if (typeof jQuery === 'undefined') {
+        console.log('jQuery not loaded yet');
+        return;
+    }
+    
+    const targetType = jQuery('#complaintTargetType').val();
+    const targetSelect = jQuery('#complaintTargetId');
+    const targetGroup = jQuery('#targetSelectGroup');
+    
+    if (!targetType) {
+        targetGroup.hide();
+        targetSelect.html('<option value="">Select a person...</option>');
+        return;
+    }
+    
+    targetGroup.show();
+    targetSelect.html('<option value="">Select a person...</option>');
+    
+    const targets = targetType === 'chef' ? chefsData : deliveryPersonsData;
+    if (targets && targets.length > 0) {
+        targets.forEach(function(person) {
+            targetSelect.append(`<option value="${person.id}">${person.username}</option>`);
+        });
+    } else {
+        targetSelect.append('<option value="">No ' + targetType + 's available</option>');
+    }
+};
+
+window.disputeComplaint = function(complaintId) {
     if (!confirm('Are you sure you want to dispute this complaint?')) {
         return;
     }
     
-    $.ajax({
+    if (typeof jQuery === 'undefined') {
+        alert('jQuery not loaded');
+        return;
+    }
+    
+    jQuery.ajax({
         url: '/api/v1/complaint/dispute',
         method: 'POST',
         contentType: 'application/json',
@@ -220,7 +345,87 @@ function disputeComplaint(complaintId) {
             alert('Error disputing complaint');
         }
     });
-}
+};
+
+// Handle complaint form submission
+(function() {
+    function initComplaintForm() {
+        if (typeof jQuery === 'undefined') {
+            console.log('jQuery not loaded yet, retrying complaint form...');
+            setTimeout(initComplaintForm, 100);
+            return;
+        }
+        
+        jQuery(document).ready(function($) {
+            console.log('Setting up complaint form');
+            
+            // Use event delegation to ensure form is found
+            $(document).on('submit', '#complaintForm', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('Complaint form submitted');
+                const targetType = $('#complaintTargetType').val();
+                const targetId = $('#complaintTargetId').val();
+                const description = $('#complaintDescription').val().trim();
+                const messageDiv = $('#complaintMessage');
+                const submitBtn = $(this).find('button[type="submit"]');
+                
+                if (!targetType || !targetId || !description) {
+                    messageDiv.html('<div class="alert alert-danger">Please fill in all fields.</div>');
+                    return false;
+                }
+                
+                // Disable button during request
+                submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Submitting...');
+                messageDiv.html('');
+                
+                console.log('Sending complaint:', { target_id: targetId, target_type: targetType, description: description });
+                
+                $.ajax({
+                    url: '/api/v1/complaint',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        target_id: targetId,
+                        target_type: targetType,
+                        complaint_type: 'complaint',
+                        description: description
+                    }),
+                    success: function(response) {
+                        console.log('Complaint response:', response);
+                        if (response.success) {
+                            messageDiv.html('<div class="alert alert-success">Complaint submitted successfully! The manager will review it.</div>');
+                            $('#complaintForm')[0].reset();
+                            $('#targetSelectGroup').hide();
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else {
+                            messageDiv.html('<div class="alert alert-danger">' + (response.message || 'Failed to submit complaint') + '</div>');
+                            submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit Complaint');
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Complaint error:', xhr);
+                        const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error submitting complaint. Please try again.';
+                        messageDiv.html('<div class="alert alert-danger">' + errorMsg + '</div>');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit Complaint');
+                    }
+                });
+                
+                return false;
+            });
+        });
+    }
+    
+    // Start initialization
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initComplaintForm);
+    } else {
+        initComplaintForm();
+    }
+})();
 
 // Handle deposit
 (function() {

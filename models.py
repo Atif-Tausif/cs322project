@@ -132,7 +132,15 @@ class Dish:
 class Order:
     """Order model"""
     def __init__(self, customer_id: str, items: List[Dict], total: float, **kwargs):
-        self.id = kwargs.get('id', f"order_{datetime.now().timestamp()}")
+        import random
+        import string
+        # Generate unique order ID: timestamp + random string
+        if 'id' not in kwargs:
+            timestamp = int(datetime.now().timestamp() * 1000)  # milliseconds for more precision
+            random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            self.id = f"ORD{timestamp}{random_str}"
+        else:
+            self.id = kwargs.get('id')
         self.customer_id = customer_id
         self.items = items  # [{'dish_id': '...', 'quantity': 2, 'price': 10.0}]
         self.total = total

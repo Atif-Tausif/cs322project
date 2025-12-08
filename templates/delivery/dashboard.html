@@ -46,6 +46,7 @@
                         <tr>
                             <th>Order ID</th>
                             <th>Total</th>
+                            <th>My Bid</th>
                             <th>Created</th>
                             <th>Actions</th>
                         </tr>
@@ -55,11 +56,21 @@
                         <tr>
                             <td>{{ order.id[:8] }}...</td>
                             <td>${{ order.total|round(2) }}</td>
+                            <td>
+                                {% if order.my_bid %}
+                                <span class="badge bg-info">${{ order.my_bid|round(2) }}</span>
+                                {% else %}
+                                <span class="text-muted">No bid</span>
+                                {% endif %}
+                            </td>
                             <td>{{ order.created_at[:19] }}</td>
                             <td>
                                 <button class="btn btn-sm btn-primary" 
-                                        onclick="showBidModal('{{ order.id }}', '{{ order.total }}')">
-                                    <i class="fas fa-gavel"></i> Place Bid
+                                        data-order-id="{{ order.id }}"
+                                        data-order-total="{{ order.total }}"
+                                        data-existing-bid="{{ order.my_bid or '' }}"
+                                        onclick="showBidModalFromButton(this)">
+                                    <i class="fas fa-gavel"></i> {% if order.my_bid %}Update{% else %}Place{% endif %} Bid
                                 </button>
                             </td>
                         </tr>
@@ -112,88 +123,42 @@
         </div>
     </div>
     
-    <!-- File Complaints About Customers -->
-    <div class="card">
-        <div class="card-header">
-            <h5><i class="fas fa-comment-alt"></i> File Complaint/Compliment About Customers</h5>
+    <!-- File a Complaint Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5><i class="fas fa-exclamation-circle"></i> File a Complaint</h5>
         </div>
         <div class="card-body">
-            <p class="text-muted">You can file complaints or compliments about customers you have delivered to.</p>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#customerComplaintModal">
-                <i class="fas fa-plus"></i> File Complaint/Compliment
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Customer Complaint Modal -->
-<div class="modal fade" id="customerComplaintModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">File Complaint/Compliment About Customer</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form id="customerComplaintForm">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="customerId" class="form-label">Customer Username</label>
-                        <input type="text" class="form-control" id="customerId" name="target_id" required>
-                        <small class="form-text text-muted">Enter the username of the customer</small>
-                    </div>
-                    <div class="mb-3">
-                        <label for="complaintType" class="form-label">Type</label>
-                        <select class="form-select" id="complaintType" name="complaint_type" required>
-                            <option value="complaint">Complaint</option>
-                            <option value="compliment">Compliment</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="complaintDescription" class="form-label">Description</label>
-                        <textarea class="form-control" id="complaintDescription" name="description" rows="4" required></textarea>
-                    </div>
-                    <input type="hidden" name="target_type" value="customer">
+            <p class="text-muted">Submit a complaint about a chef, other delivery person, or customer. The manager will review your complaint and take appropriate action.</p>
+            <form id="deliveryComplaintForm">
+                <div class="mb-3">
+                    <label for="deliveryComplaintTargetType" class="form-label">Complain About</label>
+                    <select class="form-select" id="deliveryComplaintTargetType" required onchange="updateDeliveryComplaintTargets()">
+                        <option value="">Select type...</option>
+                        <option value="chef">Chef</option>
+                        <option value="delivery">Delivery Person</option>
+                        <option value="customer">Customer</option>
+                    </select>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Submit</button>
+                <div class="mb-3" id="deliveryTargetSelectGroup" style="display: none;">
+                    <label for="deliveryComplaintTargetId" class="form-label">Select Person</label>
+                    <select class="form-select" id="deliveryComplaintTargetId" required>
+                        <option value="">Select a person...</option>
+                    </select>
                 </div>
+                <div class="mb-3">
+                    <label for="deliveryComplaintDescription" class="form-label">Description</label>
+                    <textarea class="form-control" id="deliveryComplaintDescription" rows="4" 
+                              placeholder="Please describe your complaint in detail..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-paper-plane"></i> Submit Complaint
+                </button>
             </form>
+            <div id="deliveryComplaintMessage" class="mt-3"></div>
         </div>
     </div>
 </div>
-
-<script>
-$('#customerComplaintForm').on('submit', function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-    const data = {
-        target_id: formData.get('target_id'),
-        target_type: 'customer',
-        complaint_type: formData.get('complaint_type'),
-        description: formData.get('description')
-    };
-    
-    $.ajax({
-        url: '/api/v1/complaint',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(data),
-        success: function(response) {
-            if (response.success) {
-                alert('Complaint/compliment filed successfully!');
-                $('#customerComplaintModal').modal('hide');
-                location.reload();
-            } else {
-                alert(response.message || 'Failed to file complaint');
-            }
-        },
-        error: function() {
-            alert('Error filing complaint');
-        }
-    });
-});
-</script>
 
 <!-- Bid Modal -->
 <div class="modal fade" id="bidModal" tabindex="-1">
@@ -221,38 +186,203 @@ $('#customerComplaintForm').on('submit', function(e) {
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-function showBidModal(orderId, orderTotal) {
-    $('#bidOrderId').val(orderId);
-    $('#bidAmount').val((orderTotal * 0.1).toFixed(2)); // Default 10% of order total
-    $('#bidModal').modal('show');
-}
+// Store chefs, delivery persons, and customers data
+const deliveryChefsData = {{ chefs|tojson }};
+const deliveryDeliveryPersonsData = {{ delivery_persons|tojson }};
+const deliveryCustomersData = {{ customers|tojson }};
 
-$('#bidForm').on('submit', function(e) {
-    e.preventDefault();
-    const data = {
-        order_id: $('#bidOrderId').val(),
-        bid_amount: parseFloat($('#bidAmount').val())
-    };
+// Make functions globally accessible
+window.showBidModalFromButton = function(button) {
+    if (typeof jQuery === 'undefined') {
+        alert('jQuery not loaded');
+        return;
+    }
+    const orderId = jQuery(button).data('order-id');
+    const orderTotal = jQuery(button).data('order-total');
+    const existingBid = jQuery(button).data('existing-bid');
+    window.showBidModal(orderId, orderTotal, existingBid);
+};
+
+window.showBidModal = function(orderId, orderTotal, existingBid) {
+    if (typeof jQuery === 'undefined') {
+        alert('jQuery not loaded');
+        return;
+    }
+    jQuery('#bidOrderId').val(orderId);
+    if (existingBid && existingBid !== '' && existingBid !== null && existingBid !== 'None') {
+        jQuery('#bidAmount').val(parseFloat(existingBid).toFixed(2));
+    } else {
+        jQuery('#bidAmount').val((parseFloat(orderTotal) * 0.1).toFixed(2)); // Default 10% of order total
+    }
+    jQuery('#bidModal').modal('show');
+};
+
+window.updateDeliveryComplaintTargets = function() {
+    if (typeof jQuery === 'undefined') {
+        console.log('jQuery not loaded yet');
+        return;
+    }
     
-    $.ajax({
-        url: '/api/v1/delivery/bid',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(data),
-        success: function(response) {
-            if (response.success) {
-                alert('Bid submitted successfully!');
-                location.reload();
-            } else {
-                alert(response.message || 'Failed to submit bid');
-            }
-        },
-        error: function() {
-            alert('Error submitting bid');
+    const targetType = jQuery('#deliveryComplaintTargetType').val();
+    const targetSelect = jQuery('#deliveryComplaintTargetId');
+    const targetGroup = jQuery('#deliveryTargetSelectGroup');
+    
+    if (!targetType) {
+        targetGroup.hide();
+        targetSelect.html('<option value="">Select a person...</option>');
+        return;
+    }
+    
+    targetGroup.show();
+    targetSelect.html('<option value="">Select a person...</option>');
+    
+    let targets = [];
+    if (targetType === 'chef') {
+        targets = deliveryChefsData || [];
+    } else if (targetType === 'delivery') {
+        targets = deliveryDeliveryPersonsData || [];
+    } else if (targetType === 'customer') {
+        targets = deliveryCustomersData || [];
+    }
+    
+    if (targets && targets.length > 0) {
+        targets.forEach(function(person) {
+            targetSelect.append('<option value="' + person.id + '">' + person.username + '</option>');
+        });
+    } else {
+        targetSelect.append('<option value="">No ' + targetType + 's available</option>');
+    }
+};
+
+// Initialize all JavaScript when page loads
+(function() {
+    function initDeliveryDashboard() {
+        if (typeof jQuery === 'undefined') {
+            console.log('jQuery not loaded yet, retrying...');
+            setTimeout(initDeliveryDashboard, 100);
+            return;
         }
-    });
-});
+        
+        jQuery(document).ready(function($) {
+            console.log('Initializing delivery dashboard');
+            
+            // Bid form submission
+            $('#bidForm').on('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('Bid form submitted');
+                const orderId = $('#bidOrderId').val();
+                const bidAmount = parseFloat($('#bidAmount').val());
+                
+                if (!orderId || isNaN(bidAmount) || bidAmount <= 0) {
+                    alert('Please enter a valid bid amount');
+                    return false;
+                }
+                
+                const data = {
+                    order_id: orderId,
+                    bid_amount: bidAmount
+                };
+                
+                console.log('Submitting bid:', data);
+                
+                $.ajax({
+                    url: '/api/v1/delivery/bid',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    success: function(response) {
+                        console.log('Bid response:', response);
+                        if (response.success) {
+                            alert(response.message || 'Bid submitted successfully!');
+                            $('#bidModal').modal('hide');
+                            location.reload();
+                        } else {
+                            alert(response.message || 'Failed to submit bid');
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Bid error:', xhr);
+                        const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error submitting bid';
+                        alert(errorMsg);
+                    }
+                });
+                
+                return false;
+            });
+            
+            // Complaint form submission
+            $('#deliveryComplaintForm').on('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('Complaint form submitted');
+                const targetType = $('#deliveryComplaintTargetType').val();
+                const targetId = $('#deliveryComplaintTargetId').val();
+                const description = $('#deliveryComplaintDescription').val().trim();
+                const messageDiv = $('#deliveryComplaintMessage');
+                const submitBtn = $(this).find('button[type="submit"]');
+                
+                if (!targetType || !targetId || !description) {
+                    messageDiv.html('<div class="alert alert-danger">Please fill in all fields.</div>');
+                    return false;
+                }
+                
+                submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Submitting...');
+                messageDiv.html('');
+                
+                const complaintData = {
+                    target_id: targetId,
+                    target_type: targetType,
+                    complaint_type: 'complaint',
+                    description: description
+                };
+                
+                console.log('Submitting complaint:', complaintData);
+                
+                $.ajax({
+                    url: '/api/v1/complaint',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(complaintData),
+                    success: function(response) {
+                        console.log('Complaint response:', response);
+                        if (response.success) {
+                            messageDiv.html('<div class="alert alert-success">Complaint submitted successfully! The manager will review it.</div>');
+                            $('#deliveryComplaintForm')[0].reset();
+                            $('#deliveryTargetSelectGroup').hide();
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else {
+                            messageDiv.html('<div class="alert alert-danger">' + (response.message || 'Failed to submit complaint') + '</div>');
+                            submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit Complaint');
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Complaint error:', xhr);
+                        const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error submitting complaint. Please try again.';
+                        messageDiv.html('<div class="alert alert-danger">' + errorMsg + '</div>');
+                        submitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Submit Complaint');
+                    }
+                });
+                
+                return false;
+            });
+        });
+    }
+    
+    // Start initialization
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDeliveryDashboard);
+    } else {
+        initDeliveryDashboard();
+    }
+})();
 </script>
 {% endblock %}

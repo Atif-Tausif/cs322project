@@ -303,18 +303,24 @@ def resolve_complaint(complaint_id: str, manager_id: str, resolution: str) -> Tu
     complaint.resolved_by = manager_id
     complaint.resolved_at = datetime.now().isoformat()
     
-    if resolution == 'dismissed':
-        # False complaint - warn complainant (customers, VIPs, and delivery people)
+    if resolution == 'dismissed':  # This is now "overrule"
+        # Overrule complaint - originator gets warning (customer/VIP) or complaint (employee)
+        # Target gets complaint removed (-1)
         complainant = get_user_by_id(complaint.complainant_id)
         if complainant:
-            complainant.warnings += 1
-            save_user(complainant)
-            # Check warnings for customers/VIPs (delivery people don't get deregistered from warnings)
             if complainant.role in ['customer', 'vip']:
-                complainant = check_customer_warnings(complainant)
+                # Customer/VIP gets warning
+                complainant.warnings += 1
+                save_user(complainant)
+                check_customer_warnings(complainant)
+            elif complainant.role in ['chef', 'delivery']:
+                # Employee gets complaint
+                complainant.complaints_count += 1
+                save_user(complainant)
+                check_employee_performance(complainant)
         complaint.dispute_resolution = 'dismissed'
         
-        # Remove the complaint/compliment from target's count since it was false
+        # Remove the complaint/compliment from target's count since it was overruled
         target = get_user_by_id(complaint.target_id)
         if target:
             if complaint.complaint_type == 'complaint':
@@ -399,15 +405,18 @@ def submit_delivery_bid(order_id: str, delivery_person_id: str, bid_amount: floa
         return False, "Order already has a delivery person assigned"
     
     # Check if delivery person already bid on this order
-    from database import get_all_delivery_bids
+    from database import get_all_delivery_bids, save_delivery_bid
     existing_bids = get_all_delivery_bids()
-    existing_bid = next((b for b in existing_bids if b.order_id == order_id and b.delivery_person_id == delivery_person_id and b.status == 'pending'), None)
+    # Check for any bid by this person for this order (pending or not)
+    existing_bid = next((b for b in existing_bids if b.order_id == order_id and b.delivery_person_id == delivery_person_id), None)
     if existing_bid:
-        # Update existing bid
+        # Update existing bid (reset status to pending if it was rejected)
         existing_bid.bid_amount = bid_amount
+        existing_bid.status = 'pending'  # Reset to pending when updating
         save_delivery_bid(existing_bid)
         return True, "Bid updated successfully"
     
+    # Create new bid
     bid = DeliveryBid(
         order_id=order_id,
         delivery_person_id=delivery_person_id,

@@ -221,12 +221,22 @@ def get_bids_by_order(order_id: str) -> List[DeliveryBid]:
 def save_delivery_bid(bid: DeliveryBid):
     """Save or update delivery bid"""
     bids = get_all_delivery_bids()
+    # Check if bid with same order_id and delivery_person_id exists
     existing_index = next((i for i, b in enumerate(bids) if b.id == bid.id), None)
     
     if existing_index is not None:
+        # Update existing bid
         bids[existing_index] = bid
     else:
-        bids.append(bid)
+        # Check if there's a bid for the same order by the same person (update instead of create)
+        same_bid_index = next((i for i, b in enumerate(bids) 
+                               if b.order_id == bid.order_id and b.delivery_person_id == bid.delivery_person_id), None)
+        if same_bid_index is not None:
+            # Update existing bid with new amount
+            bids[same_bid_index] = bid
+        else:
+            # Create new bid
+            bids.append(bid)
     
     save_json(DELIVERY_BIDS_FILE, [b.to_dict() for b in bids])
 
