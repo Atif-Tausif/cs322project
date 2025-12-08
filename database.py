@@ -67,13 +67,18 @@ def get_user_by_username(username: str) -> Optional[User]:
 def save_user(user: User):
     """Save or update user"""
     users = get_all_users()
+    
+    # Find existing user by ID
     existing_index = next((i for i, u in enumerate(users) if u.id == user.id), None)
     
     if existing_index is not None:
+        # Update existing user
         users[existing_index] = user
     else:
+        # Add new user
         users.append(user)
     
+    # Save to JSON file
     save_json(USERS_FILE, [u.to_dict() for u in users])
 
 def delete_user(user_id: str):

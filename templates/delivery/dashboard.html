@@ -58,7 +58,7 @@
                             <td>{{ order.created_at[:19] }}</td>
                             <td>
                                 <button class="btn btn-sm btn-primary" 
-                                        onclick="showBidModal('{{ order.id }}', {{ order.total }})">
+                                        onclick="showBidModal('{{ order.id }}', '{{ order.total }}')">
                                     <i class="fas fa-gavel"></i> Place Bid
                                 </button>
                             </td>
