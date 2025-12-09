@@ -16,7 +16,7 @@ from models import Order, Rating, Complaint, DeliveryBid
 from config import AppConfig
 from utils import calculate_discount, update_user_flavor_profile, calculate_average_rating
 
-def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tuple[bool, str, Optional[Order]]:
+def process_order(customer_id: str, items: List[Dict], cart_total: float, delivery_address: str = '') -> Tuple[bool, str, Optional[Order]]:
     """
     Process an order
     Returns: (success, message, order)
@@ -38,7 +38,23 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tup
     
     # Calculate discount for VIP
     discount = calculate_discount(customer, cart_total)
-    final_total = cart_total - discount
+    subtotal_after_discount = cart_total - discount
+    
+    # Calculate 10% delivery fee
+    delivery_fee = subtotal_after_discount * 0.10
+    
+    # Check if customer has free deliveries available for this order (VIP)
+    has_free_delivery_available = False
+    if customer.role == 'vip':
+        available_free_deliveries = customer.free_deliveries_earned - customer.free_deliveries_used
+        has_free_delivery_available = available_free_deliveries > 0
+    
+    # If free delivery is available, don't charge delivery fee
+    if has_free_delivery_available:
+        delivery_fee = 0.0
+    
+    # Final total includes delivery fee
+    final_total = subtotal_after_discount + delivery_fee
     
     # Check balance
     if customer.balance < final_total:
@@ -57,7 +73,6 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tup
         return False, f"Insufficient balance. You need ${final_total:.2f} but have ${customer.balance:.2f}. Warning added.", None
     
     # Award free delivery for VIP customers (1 free delivery per 3 orders)
-    free_delivery = False
     if customer.role == 'vip':
         orders_needed = AppConfig.VIP_FREE_DELIVERY_RATIO
         # Award free delivery on every 3rd order (orders 3, 6, 9, etc.)
@@ -65,19 +80,15 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float) -> Tup
             customer.free_deliveries_earned += 1
             # Note: free_delivery flag will be set when delivery bid is accepted if customer has available free deliveries
     
-    # Check if customer has free deliveries available for this order (VIP)
-    has_free_delivery_available = False
-    if customer.role == 'vip':
-        available_free_deliveries = customer.free_deliveries_earned - customer.free_deliveries_used
-        has_free_delivery_available = available_free_deliveries > 0
-    
     # Create order
     order = Order(
         customer_id=customer_id,
         items=items,
         total=final_total,
         discount_applied=discount,
-        free_delivery=has_free_delivery_available  # Mark if free delivery is available
+        free_delivery=has_free_delivery_available,  # Mark if free delivery is available
+        delivery_fee=delivery_fee,
+        delivery_address=delivery_address
     )
     
     # Deduct balance

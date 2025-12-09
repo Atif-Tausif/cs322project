@@ -46,6 +46,7 @@
                         <tr>
                             <th>Order ID</th>
                             <th>Total</th>
+                            <th>Delivery Address</th>
                             <th>My Bid</th>
                             <th>Created</th>
                             <th>Actions</th>
@@ -56,6 +57,13 @@
                         <tr>
                             <td>{{ order.id[:8] }}...</td>
                             <td>${{ order.total|round(2) }}</td>
+                            <td>
+                                {% if order.delivery_address %}
+                                <small><i class="fas fa-map-marker-alt"></i> {{ order.delivery_address }}</small>
+                                {% else %}
+                                <span class="text-muted">No address</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if order.my_bid %}
                                 <span class="badge bg-info">${{ order.my_bid|round(2) }}</span>
@@ -98,6 +106,7 @@
                             <th>Order ID</th>
                             <th>Total</th>
                             <th>Status</th>
+                            <th>Delivery Address</th>
                             <th>Bid Amount</th>
                             <th>Manager Memo</th>
                             <th>Actions</th>
@@ -112,6 +121,13 @@
                                 <span class="badge bg-{{ 'success' if order.status == 'delivered' else 'warning' }}">
                                     {{ order.status|title }}
                                 </span>
+                            </td>
+                            <td>
+                                {% if order.delivery_address %}
+                                <small><i class="fas fa-map-marker-alt"></i> {{ order.delivery_address }}</small>
+                                {% else %}
+                                <span class="text-muted">No address</span>
+                                {% endif %}
                             </td>
                             <td>${{ order.delivery_bid|round(2) if order.delivery_bid else 'N/A' }}</td>
                             <td>
@@ -138,7 +154,7 @@
                         </tr>
                         {% if order.manager_memo %}
                         <tr>
-                            <td colspan="6" class="bg-light">
+                            <td colspan="7" class="bg-light">
                                 <small><strong>Manager Memo:</strong> {{ order.manager_memo }}</small>
                             </td>
                         </tr>

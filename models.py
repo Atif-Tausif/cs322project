@@ -136,11 +136,28 @@ class Order:
     def __init__(self, customer_id: str, items: List[Dict], total: float, **kwargs):
         import random
         import string
-        # Generate unique order ID: timestamp + random string
+        import time
+        import uuid
+        # Generate unique order ID: timestamp + UUID short + random string
         if 'id' not in kwargs:
-            timestamp = int(datetime.now().timestamp() * 1000)  # milliseconds for more precision
+            # Use time.time_ns() for nanosecond precision, or fallback to microsecond precision
+            try:
+                # Python 3.7+ has time.time_ns()
+                timestamp_ns = time.time_ns()
+                # Use last 10 digits of nanosecond timestamp for shorter ID
+                timestamp_str = str(timestamp_ns)[-10:]
+            except AttributeError:
+                # Fallback for older Python versions
+                timestamp_us = int(datetime.now().timestamp() * 1000000)  # microseconds
+                timestamp_str = str(timestamp_us)[-10:]
+            
+            # Add UUID hex (first 8 chars) for guaranteed uniqueness
+            uuid_short = str(uuid.uuid4().hex)[:8].upper()
+            
+            # Add random string for extra uniqueness
             random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            self.id = f"ORD{timestamp}{random_str}"
+            
+            self.id = f"ORD{timestamp_str}{uuid_short}{random_str}"
         else:
             self.id = kwargs.get('id')
         self.customer_id = customer_id
@@ -154,6 +171,8 @@ class Order:
         self.delivery_rating = kwargs.get('delivery_rating', None)  # 1-5
         self.discount_applied = kwargs.get('discount_applied', 0.0)
         self.free_delivery = kwargs.get('free_delivery', False)
+        self.delivery_fee = kwargs.get('delivery_fee', 0.0)  # 10% of order total
+        self.delivery_address = kwargs.get('delivery_address', '')  # Customer delivery address
     
     def to_dict(self) -> Dict:
         """Convert order to dictionary"""
@@ -169,7 +188,9 @@ class Order:
             'food_rating': self.food_rating,
             'delivery_rating': self.delivery_rating,
             'discount_applied': self.discount_applied,
-            'free_delivery': self.free_delivery
+            'free_delivery': self.free_delivery,
+            'delivery_fee': self.delivery_fee,
+            'delivery_address': self.delivery_address
         }
     
     @classmethod

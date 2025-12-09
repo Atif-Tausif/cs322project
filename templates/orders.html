@@ -48,12 +48,21 @@
                             {% if order.discount_applied > 0 %}
                             <br><small class="text-success">Discount: -${{ order.discount_applied|round(2) }}</small>
                             {% endif %}
-                            {% if order.delivery_bid %}
+                            {% if order.delivery_fee is defined and order.delivery_fee > 0 %}
+                                {% if order.free_delivery %}
+                                <br><small class="text-success"><i class="fas fa-gift"></i> Free Delivery Applied (Saved ${{ order.delivery_fee|round(2) }})</small>
+                                {% else %}
+                                <br><small class="text-muted">Delivery Fee: ${{ order.delivery_fee|round(2) }}</small>
+                                {% endif %}
+                            {% elif order.delivery_bid %}
                                 {% if order.free_delivery %}
                                 <br><small class="text-success"><i class="fas fa-gift"></i> Free Delivery Applied (Saved ${{ order.delivery_bid|round(2) }})</small>
                                 {% else %}
                                 <br><small class="text-muted">Delivery: ${{ order.delivery_bid|round(2) }}</small>
                                 {% endif %}
+                            {% endif %}
+                            {% if order.delivery_address %}
+                            <br><small class="text-muted"><i class="fas fa-map-marker-alt"></i> {{ order.delivery_address }}</small>
                             {% endif %}
                         </div>
                         

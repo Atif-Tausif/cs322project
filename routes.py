@@ -479,9 +479,13 @@ def api_order():
     """Place an order"""
     data = request.get_json()
     items = data.get('items', [])
+    delivery_address = data.get('delivery_address', '').strip()
     
     if not items:
         return jsonify({'success': False, 'message': 'Cart is empty'})
+    
+    if not delivery_address:
+        return jsonify({'success': False, 'message': 'Delivery address is required'})
     
     # Calculate total and add prices to items for historical record
     dishes = {d.id: d for d in get_all_dishes()}
@@ -494,7 +498,7 @@ def api_order():
             total += dish.price * item.get('quantity', 1)
     
     user_id = session.get('user_id')
-    success, message, order = process_order(user_id, items, total)
+    success, message, order = process_order(user_id, items, total, delivery_address)
     
     if success:
         # Clear cart

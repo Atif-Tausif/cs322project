@@ -214,11 +214,28 @@ function placeOrder() {
             return;
         }
         
+        // Get delivery address if on cart page
+        const deliveryAddressInput = $('#deliveryAddress');
+        let deliveryAddress = '';
+        if (deliveryAddressInput.length > 0) {
+            deliveryAddress = deliveryAddressInput.val().trim();
+            if (!deliveryAddress) {
+                showNotification('Please enter your delivery address', 'warning');
+                deliveryAddressInput.focus();
+                return;
+            }
+        }
+        
+        const orderData = { items: items };
+        if (deliveryAddress) {
+            orderData.delivery_address = deliveryAddress;
+        }
+        
         $.ajax({
             url: '/api/v1/order',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ items: items }),
+            data: JSON.stringify(orderData),
             success: function(response) {
                 if (response.success) {
                     showNotification('Order placed successfully!', 'success');
@@ -249,13 +266,28 @@ function placeOrder() {
         quantity: item.quantity
     }));
     
+    // Get delivery address if on cart page
+    const deliveryAddressInput = $('#deliveryAddress');
+    let deliveryAddress = '';
+    if (deliveryAddressInput.length > 0) {
+        deliveryAddress = deliveryAddressInput.val().trim();
+        if (!deliveryAddress) {
+            showNotification('Please enter your delivery address', 'warning');
+            deliveryAddressInput.focus();
+            return;
+        }
+    }
+    
+    const orderData = { items: items };
+    if (deliveryAddress) {
+        orderData.delivery_address = deliveryAddress;
+    }
+    
     $.ajax({
         url: '/api/v1/order',
         method: 'POST',
         contentType: 'application/json',
-        data: JSON.stringify({
-            items: items
-        }),
+        data: JSON.stringify(orderData),
         success: function(response) {
             if (response.success) {
                 showNotification('Order placed successfully!', 'success');

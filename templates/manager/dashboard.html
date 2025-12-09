@@ -143,6 +143,7 @@
                             <th>Order ID</th>
                             <th>Items</th>
                             <th>Total</th>
+                            <th>Delivery Address</th>
                             <th>Status</th>
                             <th>Created</th>
                             <th>Actions</th>
@@ -160,6 +161,13 @@
                                 {% endfor %}
                             </td>
                             <td>${{ order.total|round(2) }}</td>
+                            <td>
+                                {% if order.delivery_address %}
+                                <small><i class="fas fa-map-marker-alt"></i> {{ order.delivery_address }}</small>
+                                {% else %}
+                                <span class="text-muted">No address</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <span class="badge bg-{{ 'warning' if order.status == 'pending' else 'info' if order.status == 'preparing' else 'success' if order.status == 'ready' else 'secondary' }}">
                                     {{ order.status|title }}
@@ -257,6 +265,9 @@
             <div class="card mb-3">
                 <div class="card-header">
                     <strong>Order #{{ item.order.id[:8] }}</strong> - Total: ${{ item.order.total|round(2) }}
+                    {% if item.order.delivery_address %}
+                    <br><small class="text-muted"><i class="fas fa-map-marker-alt"></i> {{ item.order.delivery_address }}</small>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     <h6>Delivery Bids:</h6>
@@ -346,7 +357,11 @@
                 <ul class="list-group">
                     {% for order in orders_without_bids %}
                     <li class="list-group-item">
-                        Order #{{ order.id[:8] }} - Total: ${{ order.total|round(2) }} - Waiting for delivery bids
+                        Order #{{ order.id[:8] }} - Total: ${{ order.total|round(2) }}
+                        {% if order.delivery_address %}
+                        <br><small class="text-muted"><i class="fas fa-map-marker-alt"></i> {{ order.delivery_address }}</small>
+                        {% endif %}
+                        <br><small class="text-muted">Waiting for delivery bids</small>
                     </li>
                     {% endfor %}
                 </ul>
