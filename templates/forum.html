@@ -43,8 +43,8 @@
                             <small class="text-muted me-3">
                                 <i class="fas fa-comments"></i> {{ post.replies|length }} replies
                             </small>
-                            {% if session.user and session.user.id != post.author_id %}
-                            <button class="btn btn-sm btn-outline-danger" onclick="reportPost('{{ post.id }}', '{{ post.author_id }}', '{{ post.author_name|replace("'", "\\'") }}')" title="Report this post">
+                            {% if session.user and session.user.id != post.author_id and session.user.role in ['customer', 'vip'] %}
+                            <button class="btn btn-sm btn-outline-danger" onclick="showReportModal('{{ post.id }}', '{{ post.author_id }}', '{{ post.author_name|replace("'", "\\'") }}', 'post')" title="Report this post">
                                 <i class="fas fa-flag"></i> Report
                             </button>
                             {% endif %}
@@ -60,8 +60,8 @@
                                     <small><strong>{{ reply.author_name or 'Unknown' }}</strong> - {{ reply.created_at[:19] }}</small>
                                     <p class="mb-0">{{ reply.content }}</p>
                                 </div>
-                                {% if session.user and session.user.id != reply.get('author_id') %}
-                                <button class="btn btn-sm btn-outline-danger" onclick="reportReply('{{ post.id }}', '{{ reply.get('id', '') }}', '{{ reply.get('author_id', '') }}', '{{ (reply.author_name or 'Unknown')|replace("'", "\\'") }}')" title="Report this reply">
+                                {% if session.user and session.user.id != reply.get('author_id') and session.user.role in ['customer', 'vip'] %}
+                                <button class="btn btn-sm btn-outline-danger" onclick="showReportModal('{{ post.id }}', '{{ reply.get('author_id', '') }}', '{{ (reply.author_name or 'Unknown')|replace("'", "\\'") }}', 'reply', '{{ reply.get('id', '') }}')" title="Report this reply">
                                     <i class="fas fa-flag"></i>
                                 </button>
                                 {% endif %}
@@ -167,6 +167,66 @@
                         <button type="submit" class="btn btn-primary">Submit</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Report Modal -->
+    {% if session.user and session.user.role in ['customer', 'vip'] %}
+    <div class="modal fade" id="reportModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">File Complaint or Compliment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="reportForm">
+                        <input type="hidden" id="reportPostId">
+                        <input type="hidden" id="reportReplyId">
+                        <input type="hidden" id="reportAuthorId">
+                        <input type="hidden" id="reportType">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Type</label>
+                            <select class="form-select" id="reportComplaintType" required>
+                                <option value="complaint">Complaint</option>
+                                <option value="compliment">Compliment</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">About</label>
+                            <select class="form-select" id="reportTargetType" required onchange="updateReportTargets()">
+                                <option value="">Select...</option>
+                                <option value="customer">Customer (from forum)</option>
+                                {% if chefs_dict %}
+                                <option value="chef">Chef (from my orders)</option>
+                                {% endif %}
+                                {% if delivery_persons_dict %}
+                                <option value="delivery">Delivery Person (from my orders)</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3" id="reportTargetSelectGroup" style="display: none;">
+                            <label class="form-label">Select Person</label>
+                            <select class="form-select" id="reportTargetId" required>
+                                <option value="">Select a person...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" id="reportDescription" rows="4" required></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitReport()">Submit</button>
+                </div>
             </div>
         </div>
     </div>
@@ -309,59 +369,105 @@ function submitReply(postId) {
     });
 }
 
-function reportPost(postId, authorId, authorName) {
-    if (!confirm('Report this post by ' + authorName + '? The manager will review your complaint.')) {
-        return;
-    }
-    
-    const description = prompt('Please describe why you are reporting this post:');
-    if (!description || !description.trim()) {
-        return;
-    }
-    
+// Store data for report modal
+const forumChefsData = {{ chefs_dict|tojson|default('{}') }};
+const forumDeliveryPersonsData = {{ delivery_persons_dict|tojson|default('{}') }};
+
+function showReportModal(postId, authorId, authorName, type, replyId) {
     if (typeof jQuery === 'undefined') {
         alert('Error: jQuery not loaded');
         return;
     }
     
-    jQuery.ajax({
-        url: '/api/v1/complaint',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({
-            target_id: authorId,
-            target_type: 'customer',
-            complaint_type: 'complaint',
-            description: 'Forum Post Report (Post ID: ' + postId + '): ' + description.trim()
-        }),
-        success: function(response) {
-            if (response.success) {
-                alert('Post reported successfully. The manager will review your complaint.');
-            } else {
-                alert(response.message || 'Failed to report post');
-            }
-        },
-        error: function(xhr) {
-            console.error('Error reporting post:', xhr);
-            const errorMsg = xhr.responseJSON?.message || 'Error reporting post';
-            alert(errorMsg);
-        }
-    });
+    // Set form values
+    jQuery('#reportPostId').val(postId || '');
+    jQuery('#reportReplyId').val(replyId || '');
+    jQuery('#reportAuthorId').val(authorId || '');
+    jQuery('#reportType').val(type || 'post');
+    jQuery('#reportComplaintType').val('complaint');
+    jQuery('#reportTargetType').val('');
+    jQuery('#reportTargetId').val('');
+    jQuery('#reportDescription').val('');
+    jQuery('#reportTargetSelectGroup').hide();
+    
+    // Show modal
+    const modalEl = document.getElementById('reportModal');
+    if (modalEl) {
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
 }
 
-function reportReply(postId, replyId, authorId, authorName) {
-    if (!confirm('Report this reply by ' + authorName + '? The manager will review your complaint.')) {
+function updateReportTargets() {
+    if (typeof jQuery === 'undefined') {
         return;
     }
     
-    const description = prompt('Please describe why you are reporting this reply:');
-    if (!description || !description.trim()) {
+    const targetType = jQuery('#reportTargetType').val();
+    const targetSelect = jQuery('#reportTargetId');
+    const targetGroup = jQuery('#reportTargetSelectGroup');
+    const authorId = jQuery('#reportAuthorId').val();
+    
+    if (!targetType) {
+        targetGroup.hide();
+        targetSelect.html('<option value="">Select a person...</option>');
         return;
     }
     
+    targetGroup.show();
+    targetSelect.html('<option value="">Select a person...</option>');
+    
+    if (targetType === 'customer') {
+        // Pre-select the forum author
+        if (authorId) {
+            targetSelect.append(`<option value="${authorId}" selected>Customer (from forum)</option>`);
+        }
+    } else if (targetType === 'chef') {
+        const chefs = Object.values(forumChefsData || {});
+        if (chefs.length > 0) {
+            chefs.forEach(function(chef) {
+                targetSelect.append(`<option value="${chef.id}">${chef.username}</option>`);
+            });
+        } else {
+            targetSelect.append('<option value="">No chefs available from your orders</option>');
+        }
+    } else if (targetType === 'delivery') {
+        const deliveryPersons = Object.values(forumDeliveryPersonsData || {});
+        if (deliveryPersons.length > 0) {
+            deliveryPersons.forEach(function(delivery) {
+                targetSelect.append(`<option value="${delivery.id}">${delivery.username}</option>`);
+            });
+        } else {
+            targetSelect.append('<option value="">No delivery persons available from your orders</option>');
+        }
+    }
+}
+
+function submitReport() {
     if (typeof jQuery === 'undefined') {
         alert('Error: jQuery not loaded');
         return;
+    }
+    
+    const complaintType = jQuery('#reportComplaintType').val();
+    const targetType = jQuery('#reportTargetType').val();
+    const targetId = jQuery('#reportTargetId').val();
+    const description = jQuery('#reportDescription').val().trim();
+    const postId = jQuery('#reportPostId').val();
+    const replyId = jQuery('#reportReplyId').val();
+    const reportType = jQuery('#reportType').val();
+    
+    if (!complaintType || !targetType || !targetId || !description) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    // Build description with context
+    let fullDescription = description;
+    if (reportType === 'post') {
+        fullDescription = 'Forum Post Report (Post ID: ' + postId + '): ' + description;
+    } else if (reportType === 'reply') {
+        fullDescription = 'Forum Reply Report (Post ID: ' + postId + ', Reply ID: ' + replyId + '): ' + description;
     }
     
     jQuery.ajax({
@@ -369,21 +475,24 @@ function reportReply(postId, replyId, authorId, authorName) {
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify({
-            target_id: authorId,
-            target_type: 'customer',
-            complaint_type: 'complaint',
-            description: 'Forum Reply Report (Post ID: ' + postId + ', Reply ID: ' + replyId + '): ' + description.trim()
+            target_id: targetId,
+            target_type: targetType,
+            complaint_type: complaintType,
+            description: fullDescription
         }),
         success: function(response) {
             if (response.success) {
-                alert('Reply reported successfully. The manager will review your complaint.');
+                const typeText = complaintType === 'compliment' ? 'Compliment' : 'Complaint';
+                alert(typeText + ' submitted successfully. The manager will review it.');
+                jQuery('#reportModal').modal('hide');
+                jQuery('#reportForm')[0].reset();
             } else {
-                alert(response.message || 'Failed to report reply');
+                alert(response.message || 'Failed to submit');
             }
         },
         error: function(xhr) {
-            console.error('Error reporting reply:', xhr);
-            const errorMsg = xhr.responseJSON?.message || 'Error reporting reply';
+            console.error('Error submitting report:', xhr);
+            const errorMsg = xhr.responseJSON?.message || 'Error submitting report';
             alert(errorMsg);
         }
     });

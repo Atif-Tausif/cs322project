@@ -99,6 +99,7 @@
                             <th>Total</th>
                             <th>Status</th>
                             <th>Bid Amount</th>
+                            <th>Manager Memo</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -114,6 +115,15 @@
                             </td>
                             <td>${{ order.delivery_bid|round(2) if order.delivery_bid else 'N/A' }}</td>
                             <td>
+                                {% if order.manager_memo %}
+                                <span class="badge bg-info" data-bs-toggle="tooltip" title="{{ order.manager_memo }}">
+                                    <i class="fas fa-sticky-note"></i> Memo
+                                </span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 {% if order.status == 'delivering' %}
                                 <form method="POST" action="/delivery/mark-delivered" class="d-inline mark-delivered-form">
                                     <input type="hidden" name="order_id" value="{{ order.id }}">
@@ -126,6 +136,13 @@
                                 {% endif %}
                             </td>
                         </tr>
+                        {% if order.manager_memo %}
+                        <tr>
+                            <td colspan="6" class="bg-light">
+                                <small><strong>Manager Memo:</strong> {{ order.manager_memo }}</small>
+                            </td>
+                        </tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>

@@ -58,9 +58,11 @@
                     All Chefs
                 </button>
                 {% for chef in chefs|default([]) %}
+                {% if chef.approved %}
                 <button type="button" class="btn btn-outline-secondary filter-btn" data-chef="{{ chef.id }}">
-                    {{ chef.name }}
+                    Chef {{ loop.index }}
                 </button>
+                {% endif %}
                 {% endfor %}
             </div>
         </div>

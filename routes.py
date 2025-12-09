@@ -47,7 +47,7 @@ def index():
 @bp.route('/menu')
 def menu():
     """Menu page"""
-    chefs = [u for u in get_all_users() if u.role == 'chef']
+    chefs = [u for u in get_all_users() if u.role == 'chef' and u.approved]
     return render_template('menu.html', chefs=chefs)
 
 @bp.route('/dish/<dish_id>')
@@ -268,7 +268,36 @@ def forum():
         for reply in post.replies:
             reply['author_name'] = users.get(reply.get('author_id'), 'Unknown')
     
-    return render_template('forum.html', posts=posts)
+    # Get user's orders for reporting chefs and delivery persons
+    user_orders = []
+    chefs_dict = {}
+    delivery_persons_dict = {}
+    if session.get('user_id'):
+        user = get_current_user()
+        if user and user.role in ['customer', 'vip']:
+            user_orders = get_orders_by_customer(user.id)
+            # Get chefs and delivery persons from orders
+            dishes = {d.id: d for d in get_all_dishes()}
+            all_users = get_all_users()
+            for order in user_orders:
+                if order.status == 'delivered':
+                    # Get chefs from dishes in order
+                    for item in order.items:
+                        dish = dishes.get(item.get('dish_id'))
+                        if dish and dish.chef_id:
+                            chef = next((u for u in all_users if u.id == dish.chef_id), None)
+                            if chef and chef.approved:
+                                chefs_dict[chef.id] = chef.to_dict()
+                    # Get delivery person
+                    if order.delivery_person_id:
+                        delivery_person = next((u for u in all_users if u.id == order.delivery_person_id), None)
+                        if delivery_person and delivery_person.approved:
+                            delivery_persons_dict[delivery_person.id] = delivery_person.to_dict()
+    
+    return render_template('forum.html', posts=posts, 
+                         user_orders=user_orders,
+                         chefs_dict=chefs_dict,
+                         delivery_persons_dict=delivery_persons_dict)
 
 # ============================================================================
 # API Endpoints
@@ -1399,8 +1428,14 @@ def delivery_dashboard():
         my_bid = next((b for b in my_bids if b.order_id == order.id and b.status == 'pending'), None)
         order.my_bid = my_bid.bid_amount if my_bid else None
     
-    # Get my deliveries
+    # Get my deliveries with bid memos
     my_deliveries = [o for o in orders if o.delivery_person_id == user.id]
+    # Add memo information to deliveries
+    for order in my_deliveries:
+        # Find the accepted bid for this order
+        accepted_bid = next((b for b in bids if b.order_id == order.id and b.delivery_person_id == user.id and b.status == 'accepted'), None)
+        if accepted_bid and accepted_bid.manager_memo:
+            order.manager_memo = accepted_bid.manager_memo
     
     # Get chefs, delivery persons, and customers for complaint form
     all_users = get_all_users()
