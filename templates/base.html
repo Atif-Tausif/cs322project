@@ -59,9 +59,16 @@
                         <!-- User Dropdown -->
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-user"></i> {{ session.user.username }}
                                 {% if session.user.role == 'vip' %}
-                                <span class="badge bg-warning text-dark">VIP</span>
+                                <i class="fas fa-crown vip-crown"></i>
+                                {% else %}
+                                <i class="fas fa-user"></i>
+                                {% endif %}
+                                {{ session.user.username }}
+                                {% if session.user.role == 'vip' %}
+                                <span class="badge vip-badge ms-2">
+                                    <i class="fas fa-star vip-icon"></i>VIP
+                                </span>
                                 {% endif %}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
@@ -170,6 +177,9 @@
     </div>
     {% endif %}
 
+    <!-- Page Transition Overlay -->
+    <div class="page-transition" id="pageTransition"></div>
+
     <!-- Footer -->
     <footer class="bg-dark text-white mt-5">
         <div class="container py-4">
@@ -210,6 +220,95 @@
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/date-format.js') }}"></script>
+    
+    <script>
+    // Page Transition Handler
+    (function() {
+        const transition = document.getElementById('pageTransition');
+        if (!transition) return;
+        
+        // Handle all internal links
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('a');
+            if (!link || !link.href) return;
+            
+            // Only handle same-origin links
+            try {
+                const url = new URL(link.href);
+                if (url.origin !== window.location.origin) return;
+                
+                // Don't handle special links
+                if (link.hasAttribute('download') || 
+                    link.hasAttribute('target') || 
+                    link.hasAttribute('data-bs-toggle') ||
+                    link.getAttribute('href').startsWith('#')) {
+                    return;
+                }
+                
+                // Handle navigation
+                e.preventDefault();
+                transition.classList.add('active');
+                
+                setTimeout(function() {
+                    window.location.href = link.href;
+                }, 400);
+            } catch (err) {
+                // Invalid URL, ignore
+            }
+        });
+        
+        // Remove transition on page load
+        window.addEventListener('load', function() {
+            transition.classList.remove('active');
+        });
+    })();
+    
+    // VIP Promotion Sound Effect (when VIP status is detected)
+    {% if session.user and session.user.role == 'vip' %}
+    (function() {
+        // Check if this is a new VIP promotion
+        const vipSince = '{{ session.user.vip_since|default("") }}';
+        if (vipSince) {
+            // Create a pleasant sound for VIP status
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 523.25; // C5 note
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+                
+                // Play a second harmonic note
+                setTimeout(function() {
+                    const osc2 = audioContext.createOscillator();
+                    const gain2 = audioContext.createGain();
+                    osc2.connect(gain2);
+                    gain2.connect(audioContext.destination);
+                    osc2.frequency.value = 659.25; // E5 note
+                    osc2.type = 'sine';
+                    gain2.gain.setValueAtTime(0.2, audioContext.currentTime);
+                    gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    osc2.start();
+                    osc2.stop(audioContext.currentTime + 0.5);
+                }, 200);
+            } catch (e) {
+                // Audio API not supported, silently fail
+                console.log('Audio API not available');
+            }
+        }
+    })();
+    {% endif %}
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

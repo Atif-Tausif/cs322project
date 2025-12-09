@@ -27,18 +27,26 @@
             <div class="card bg-light">
                 <div class="card-body">
                     <h4>
-                        <i class="fas fa-user-circle"></i> 
+                        {% if session.user.role == 'vip' %}
+                        <i class="fas fa-crown vip-crown"></i>
+                        {% else %}
+                        <i class="fas fa-user-circle"></i>
+                        {% endif %}
                         Welcome back, {{ session.user.username }}!
                         {% if session.user.role == 'vip' %}
-                        <span class="badge bg-warning text-dark">VIP Member</span>
+                        <span class="badge vip-badge ms-2">
+                            <i class="fas fa-star vip-icon"></i>VIP Member
+                        </span>
                         {% endif %}
                     </h4>
                     <p class="mb-2">
                         Account Balance: <strong>${{ (session.user.balance or 0)|round(2) }}</strong>
                     </p>
                     {% if session.user.role == 'vip' %}
-                    <p class="text-success mb-0">
-                        <i class="fas fa-star"></i> You're enjoying 5% discount on all orders!
+                    <p class="mb-0">
+                        <span class="badge vip-badge">
+                            <i class="fas fa-star"></i> You're enjoying 5% discount on all orders!
+                        </span>
                     </p>
                     {% endif %}
                 </div>
@@ -245,6 +253,20 @@ function displayFavorites(dishes) {
     });
 }
 
+function getFlavorTagClass(tag) {
+    const tagLower = tag.toLowerCase();
+    if (tagLower.includes('spicy') || tagLower.includes('hot')) {
+        return 'flavor-tag-spicy';
+    } else if (tagLower.includes('sweet') || tagLower.includes('dessert')) {
+        return 'flavor-tag-sweet';
+    } else if (tagLower.includes('savory') || tagLower.includes('umami')) {
+        return 'flavor-tag-savory';
+    } else if (tagLower.includes('tangy') || tagLower.includes('sour') || tagLower.includes('citrus')) {
+        return 'flavor-tag-tangy';
+    }
+    return 'bg-secondary';
+}
+
 function createDishCard(dish) {
     const description = dish.description || '';
     const descPreview = description.length > 100 ? description.substring(0, 100) + '...' : description;
@@ -256,6 +278,18 @@ function createDishCard(dish) {
     const emptyStarsHtml = '<i class="far fa-star text-warning"></i>'.repeat(emptyStars);
     const matchScoreHtml = dish.match_score ? `<small class="text-success"><i class="fas fa-check-circle"></i> ${dish.match_score}% match</small>` : '';
     
+    // Create flavor tags HTML
+    let flavorTagsHtml = '';
+    if (dish.flavor_tags && Array.isArray(dish.flavor_tags) && dish.flavor_tags.length > 0) {
+        flavorTagsHtml = '<div class="mt-2 mb-2">';
+        dish.flavor_tags.forEach(tag => {
+            const tagClass = getFlavorTagClass(tag);
+            const tagTitle = tag.charAt(0).toUpperCase() + tag.slice(1);
+            flavorTagsHtml += `<span class="badge ${tagClass} me-1 mb-1">${tagTitle}</span>`;
+        });
+        flavorTagsHtml += '</div>';
+    }
+    
     return `
         <div class="col-md-4 mb-4">
             <div class="card dish-card h-100">
@@ -263,6 +297,7 @@ function createDishCard(dish) {
                 <div class="card-body">
                     <h5 class="card-title">${dish.name || 'Unnamed Dish'}</h5>
                     <p class="card-text text-muted">${descPreview}</p>
+                    ${flavorTagsHtml}
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="h5 mb-0">$${(dish.price || 0).toFixed(2)}</span>
                         <div class="rating">

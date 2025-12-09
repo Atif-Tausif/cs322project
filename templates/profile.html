@@ -277,7 +277,7 @@
                                 {% for order in orders %}
                                 <tr>
                                     <td><a href="/orders#order-{{ order.id }}">{{ order.id[:8] }}...</a></td>
-                                    <td>{{ order.created_at[:10] }}</td>
+                                    <td data-date="{{ order.created_at }}">{{ order.created_at[:10] }}</td>
                                     <td>${{ order.total|round(2) }}</td>
                                     <td>
                                         <span class="badge bg-{{ 'success' if order.status == 'delivered' else 'warning' }}">

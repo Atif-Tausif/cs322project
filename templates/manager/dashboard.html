@@ -57,7 +57,7 @@
                             <td>{{ user.username }}</td>
                             <td>{{ user.email or 'N/A' }}</td>
                             <td>{{ user.role|title }}</td>
-                            <td>{{ user.created_at[:10] }}</td>
+                            <td data-date="{{ user.created_at }}">{{ user.created_at[:10] }}</td>
                             <td>
                                 <form method="POST" action="{{ url_for('main.manager_approve_user', user_id=user.id) }}" class="d-inline">
                                     <button type="submit" class="btn btn-sm btn-success">
@@ -165,7 +165,7 @@
                                     {{ order.status|title }}
                                 </span>
                             </td>
-                            <td>{{ order.created_at[:19] }}</td>
+                            <td data-datetime="{{ order.created_at }}">{{ order.created_at[:19] }}</td>
                             <td>
                                 <select class="form-select form-select-sm" onchange="updateOrderStatus('{{ order.id }}', this.value)" style="width: auto; display: inline-block;">
                                     <option value="{{ order.status }}" selected>{{ order.status|title }}</option>
@@ -218,7 +218,7 @@
                             <td>{{ complaint.complainant_name or 'Unknown' }}</td>
                             <td>{{ complaint.target_name or 'Unknown' }} ({{ complaint.target_type|title }})</td>
                             <td>{{ complaint.description[:50] }}{% if complaint.description|length > 50 %}...{% endif %}</td>
-                            <td>{{ complaint.created_at[:10] }}</td>
+                            <td data-date="{{ complaint.created_at }}">{{ complaint.created_at[:10] }}</td>
                             <td>
                                 {% if complaint.disputed %}
                                 <span class="badge bg-warning">Disputed</span>
@@ -613,7 +613,7 @@
                                 <span class="text-muted">Not rated</span>
                                 {% endif %}
                             </td>
-                            <td>{{ order.created_at[:10] }}</td>
+                            <td data-date="{{ order.created_at }}">{{ order.created_at[:10] }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

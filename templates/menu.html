@@ -306,9 +306,35 @@ $(document).ready(function() {
     /**
      * Create dish card HTML
      */
+    function getFlavorTagClass(tag) {
+        const tagLower = tag.toLowerCase();
+        if (tagLower.includes('spicy') || tagLower.includes('hot')) {
+            return 'flavor-tag-spicy';
+        } else if (tagLower.includes('sweet') || tagLower.includes('dessert')) {
+            return 'flavor-tag-sweet';
+        } else if (tagLower.includes('savory') || tagLower.includes('umami')) {
+            return 'flavor-tag-savory';
+        } else if (tagLower.includes('tangy') || tagLower.includes('sour') || tagLower.includes('citrus')) {
+            return 'flavor-tag-tangy';
+        }
+        return 'bg-secondary';
+    }
+    
     function createDishCard(dish) {
-        const vipBadge = dish.vip_only ? '<span class="badge bg-warning text-dark position-absolute top-0 start-0 m-2"><i class="fas fa-crown"></i> VIP Only</span>' : '';
+        const vipBadge = dish.vip_only ? '<span class="badge vip-badge position-absolute top-0 start-0 m-2"><i class="fas fa-crown"></i> VIP Only</span>' : '';
         const matchScore = dish.match_score ? `<small class="text-success"><i class="fas fa-check-circle"></i> ${dish.match_score}% match</small>` : '';
+        
+        // Create flavor tags HTML
+        let flavorTagsHtml = '';
+        if (dish.flavor_tags && Array.isArray(dish.flavor_tags) && dish.flavor_tags.length > 0) {
+            flavorTagsHtml = '<div class="mt-2">';
+            dish.flavor_tags.forEach(tag => {
+                const tagClass = getFlavorTagClass(tag);
+                const tagTitle = tag.charAt(0).toUpperCase() + tag.slice(1);
+                flavorTagsHtml += `<span class="badge ${tagClass} me-1 mb-1">${tagTitle}</span>`;
+            });
+            flavorTagsHtml += '</div>';
+        }
         
         return `
             <div class="col-md-4 mb-4">
@@ -320,7 +346,8 @@ $(document).ready(function() {
                     <div class="card-body">
                         <h5 class="card-title">${dish.name}</h5>
                         <p class="card-text text-muted">${dish.description.substring(0, 100)}...</p>
-                        <div class="d-flex justify-content-between align-items-center mb-2">
+                        ${flavorTagsHtml}
+                        <div class="d-flex justify-content-between align-items-center mb-2 mt-2">
                             <span class="h5 mb-0">$${dish.price}</span>
                             <div class="rating">
                                 ${'<i class="fas fa-star text-warning"></i>'.repeat(Math.round(dish.rating))}

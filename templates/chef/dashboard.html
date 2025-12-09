@@ -75,7 +75,7 @@
                                     {{ order.status|title }}
                                 </span>
                             </td>
-                            <td>{{ order.created_at[:19] }}</td>
+                            <td data-datetime="{{ order.created_at }}">{{ order.created_at[:19] }}</td>
                             <td>
                                 {% if order.status == 'pending' %}
                                 <button class="btn btn-sm btn-primary" onclick="updateOrderStatus('{{ order.id }}', 'preparing')">
@@ -197,7 +197,7 @@
                                 <span class="text-muted">Not rated</span>
                                 {% endif %}
                             </td>
-                            <td>{{ order.created_at[:10] }}</td>
+                            <td data-date="{{ order.created_at }}">{{ order.created_at[:10] }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

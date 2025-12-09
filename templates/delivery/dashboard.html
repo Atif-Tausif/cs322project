@@ -63,7 +63,7 @@
                                 <span class="text-muted">No bid</span>
                                 {% endif %}
                             </td>
-                            <td>{{ order.created_at[:19] }}</td>
+                            <td data-datetime="{{ order.created_at }}">{{ order.created_at[:19] }}</td>
                             <td>
                                 <button class="btn btn-sm btn-primary" 
                                         data-order-id="{{ order.id }}"

@@ -24,8 +24,14 @@
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Quantity</label>
-                            <input type="number" class="form-control cart-quantity" 
+                            <div class="quantity-controls">
+                                <button class="quantity-btn" onclick="updateQuantity('{{ item.dish_id }}', -1)" type="button">-</button>
+                                <span class="quantity-display" id="quantity-{{ item.dish_id }}">{{ item.quantity }}</span>
+                                <button class="quantity-btn" onclick="updateQuantity('{{ item.dish_id }}', 1)" type="button">+</button>
+                            </div>
+                            <input type="hidden" class="cart-quantity" 
                                    data-dish-id="{{ item.dish_id }}" 
+                                   id="qty-{{ item.dish_id }}"
                                    value="{{ item.quantity }}" min="1" max="999">
                         </div>
                         <div class="col-md-2 text-end">
@@ -97,6 +103,58 @@
 </div>
 
 <script>
+// Quantity update function
+function updateQuantity(dishId, change) {
+    const hiddenInput = document.getElementById('qty-' + dishId);
+    const display = document.getElementById('quantity-' + dishId);
+    
+    if (!hiddenInput || !display) return;
+    
+    let currentQty = parseInt(hiddenInput.value) || 1;
+    let newQty = currentQty + change;
+    
+    // Enforce limits
+    if (newQty < 1) newQty = 1;
+    if (newQty > 999) newQty = 999;
+    
+    if (newQty === currentQty) return;
+    
+    // Update display immediately for better UX
+    display.textContent = newQty;
+    hiddenInput.value = newQty;
+    
+    // Update via API
+    $.ajax({
+        url: '/api/v1/cart/update',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            dish_id: dishId,
+            quantity: newQty
+        }),
+        success: function(response) {
+            if (response.success) {
+                $('#cart-count').text(response.cart_count);
+                // Reload to update totals
+                setTimeout(function() {
+                    location.reload();
+                }, 300);
+            } else {
+                // Revert on error
+                display.textContent = currentQty;
+                hiddenInput.value = currentQty;
+                alert(response.message || 'Failed to update quantity');
+            }
+        },
+        error: function() {
+            // Revert on error
+            display.textContent = currentQty;
+            hiddenInput.value = currentQty;
+            alert('Error updating quantity');
+        }
+    });
+}
+
 // Override placeOrder function for cart page - ensure it runs after jQuery is loaded
 $(document).ready(function() {
     // Override the global placeOrder function
@@ -128,7 +186,16 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     alert('Order placed successfully!');
-                    window.location.href = '/orders';
+                    // Use page transition
+                    const transition = document.getElementById('pageTransition');
+                    if (transition) {
+                        transition.classList.add('active');
+                        setTimeout(function() {
+                            window.location.href = '/orders';
+                        }, 400);
+                    } else {
+                        window.location.href = '/orders';
+                    }
                 } else {
                     alert(response.message || 'Failed to place order');
                 }

@@ -40,7 +40,18 @@
             <div class="mb-3">
                 <strong>Flavor Tags:</strong>
                 {% for tag in dish.flavor_tags %}
-                <span class="badge bg-secondary me-1">{{ tag|title }}</span>
+                {% set tag_lower = tag|lower %}
+                {% if 'spicy' in tag_lower or 'hot' in tag_lower %}
+                    <span class="badge flavor-tag-spicy me-2 mt-2">{{ tag|title }}</span>
+                {% elif 'sweet' in tag_lower or 'dessert' in tag_lower %}
+                    <span class="badge flavor-tag-sweet me-2 mt-2">{{ tag|title }}</span>
+                {% elif 'savory' in tag_lower or 'umami' in tag_lower %}
+                    <span class="badge flavor-tag-savory me-2 mt-2">{{ tag|title }}</span>
+                {% elif 'tangy' in tag_lower or 'sour' in tag_lower or 'citrus' in tag_lower %}
+                    <span class="badge flavor-tag-tangy me-2 mt-2">{{ tag|title }}</span>
+                {% else %}
+                    <span class="badge bg-secondary me-2 mt-2">{{ tag|title }}</span>
+                {% endif %}
                 {% endfor %}
             </div>
             {% endif %}

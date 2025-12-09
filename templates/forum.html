@@ -28,7 +28,7 @@
                         <strong>{{ post.title }}</strong>
                         <span class="badge bg-secondary ms-2">{{ post.category|title }}</span>
                     </div>
-                    <small class="text-muted">{{ post.created_at[:19] }}</small>
+                    <small class="text-muted" data-datetime="{{ post.created_at }}">{{ post.created_at[:19] }}</small>
                 </div>
                 <div class="card-body">
                     <p>{{ post.content }}</p>
@@ -57,7 +57,7 @@
                         <div class="mb-2 p-2 bg-light rounded">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <small><strong>{{ reply.author_name or 'Unknown' }}</strong> - {{ reply.created_at[:19] }}</small>
+                                    <small><strong>{{ reply.author_name or 'Unknown' }}</strong> - <span data-datetime="{{ reply.created_at }}">{{ reply.created_at[:19] }}</span></small>
                                     <p class="mb-0">{{ reply.content }}</p>
                                 </div>
                                 {% if session.user and session.user.id != reply.get('author_id') and session.user.role in ['customer', 'vip'] %}
