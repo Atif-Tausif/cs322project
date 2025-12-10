@@ -20,22 +20,24 @@ class FlaskConfig:
     
 # LLM Configuration
 class LLMConfig:
-    # Choose: 'ollama' or 'huggingface'
     PROVIDER = os.environ.get('LLM_PROVIDER', 'ollama')
-    
-    # Ollama settings
+
+    # Ollama
     OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
     OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3')
-    
-    # HuggingFace settings
+
+    # HuggingFace
     HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN', '')
     HUGGINGFACE_MODEL = os.environ.get('HUGGINGFACE_MODEL', 'tiiuae/falcon-7b-instruct')
-    HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models"
+    HUGGINGFACE_API_URL = 'https://router.huggingface.co'
+
+    # Gemini
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 
-    
-    # Timeout for API calls (seconds)
     TIMEOUT = 30
+
 
 # Application Settings
 class AppConfig:
