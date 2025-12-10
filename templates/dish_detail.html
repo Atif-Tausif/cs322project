@@ -56,6 +56,26 @@
             </div>
             {% endif %}
             
+            <!-- AI Nutritional Information Section -->
+            <div class="mb-4" id="nutrition-section">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-line"></i> Nutritional Information
+                            <small class="text-white-50 ms-2">(AI-Estimated)</small>
+                        </h5>
+                    </div>
+                    <div class="card-body" id="nutrition-content">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="text-muted mt-2">Analyzing nutritional information...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             {% if session.user and session.user.role in ['customer', 'vip'] %}
                 {% if dish.vip_only and session.user.role != 'vip' %}
                 <div class="alert alert-warning">
@@ -80,4 +100,96 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dishId = '{{ dish.id }}';
+    const nutritionContent = document.getElementById('nutrition-content');
+    
+    // Fetch nutritional information
+    fetch(`/api/v1/nutrition/${dishId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.nutritional_info) {
+                const nutrition = data.nutritional_info;
+                nutritionContent.innerHTML = `
+                    <div class="row mb-3">
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                                <div>
+                                    <strong class="text-primary">Calories</strong>
+                                    <p class="mb-0 text-muted">per serving</p>
+                                </div>
+                                <h3 class="mb-0 text-primary">${nutrition.calories || 'N/A'}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                                <div>
+                                    <strong class="text-success">Protein</strong>
+                                    <p class="mb-0 text-muted">grams</p>
+                                </div>
+                                <h3 class="mb-0 text-success">${(nutrition.protein || 0).toFixed(1)}g</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 mb-2">
+                            <div class="p-2 bg-light rounded text-center">
+                                <strong class="text-info">Carbs</strong>
+                                <p class="mb-0">${(nutrition.carbs || 0).toFixed(1)}g</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <div class="p-2 bg-light rounded text-center">
+                                <strong class="text-warning">Fat</strong>
+                                <p class="mb-0">${(nutrition.fat || 0).toFixed(1)}g</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <div class="p-2 bg-light rounded text-center">
+                                <strong class="text-secondary">Fiber</strong>
+                                <p class="mb-0">${(nutrition.fiber || 0).toFixed(1)}g</p>
+                            </div>
+                        </div>
+                    </div>
+                    ${nutrition.allergens && nutrition.allergens.length > 0 ? `
+                        <div class="mb-2">
+                            <strong><i class="fas fa-exclamation-triangle text-warning"></i> Allergens:</strong>
+                            ${nutrition.allergens.map(allergen => 
+                                `<span class="badge bg-warning text-dark me-1 mt-1">${allergen}</span>`
+                            ).join('')}
+                        </div>
+                    ` : ''}
+                    ${nutrition.dietary_tags && nutrition.dietary_tags.length > 0 ? `
+                        <div>
+                            <strong><i class="fas fa-leaf text-success"></i> Dietary Tags:</strong>
+                            ${nutrition.dietary_tags.map(tag => 
+                                `<span class="badge bg-success me-1 mt-1">${tag}</span>`
+                            ).join('')}
+                        </div>
+                    ` : ''}
+                    ${!data.cached ? '<small class="text-muted d-block mt-2"><i class="fas fa-robot"></i> Calculated using AI</small>' : ''}
+                `;
+            } else {
+                nutritionContent.innerHTML = `
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle"></i> Nutritional information is currently unavailable. 
+                        Please check back later or contact our customer service.
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching nutrition:', error);
+            nutritionContent.innerHTML = `
+                <div class="alert alert-warning mb-0">
+                    <i class="fas fa-exclamation-triangle"></i> Unable to load nutritional information at this time.
+                </div>
+            `;
+        });
+});
+</script>
 {% endblock %}

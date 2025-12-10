@@ -409,3 +409,82 @@ def get_flavor_profile_analysis(user_id: str) -> Dict:
         analysis['recommendations'] = [d.to_dict() for d in matching_dishes[:5]]
     
     return analysis
+
+def estimate_nutritional_info(dish_name: str, dish_description: str, category: str = 'main') -> Optional[Dict]:
+    """
+    Estimate nutritional information for a dish using AI (Gemini)
+    Returns: Dictionary with nutritional information or None if failed
+    Format: {
+        'calories': int,
+        'protein': float (grams),
+        'carbs': float (grams),
+        'fat': float (grams),
+        'fiber': float (grams),
+        'allergens': List[str],
+        'dietary_tags': List[str]  # e.g., 'vegetarian', 'gluten-free', 'vegan'
+    }
+    """
+    try:
+        prompt = f"""Analyze the following dish and estimate its nutritional information.
+Dish Name: {dish_name}
+Description: {dish_description}
+Category: {category}
+
+Please provide nutritional estimates in JSON format. Be realistic and consider typical serving sizes for this type of dish.
+Return ONLY valid JSON in this exact format (no markdown, no explanation):
+{{
+    "calories": <integer estimate>,
+    "protein": <float grams>,
+    "carbs": <float grams>,
+    "fat": <float grams>,
+    "fiber": <float grams>,
+    "allergens": [<list of potential allergens like "dairy", "nuts", "gluten", "eggs", "seafood", "soy">],
+    "dietary_tags": [<list of dietary tags like "vegetarian", "vegan", "gluten-free", "keto-friendly", "high-protein", "low-carb">]
+}}
+
+Examples of allergens: dairy, nuts, gluten, eggs, seafood, soy, shellfish
+Examples of dietary tags: vegetarian, vegan, gluten-free, keto-friendly, high-protein, low-carb, low-fat, low-calorie
+
+Only include allergens and dietary tags if you are reasonably confident based on the description.
+If unsure about allergens or dietary tags, use empty arrays.
+Return ONLY the JSON object, nothing else."""
+
+        response = call_gemini(prompt)
+        
+        if not response:
+            return None
+        
+        # Clean the response - remove markdown code blocks if present
+        response = response.strip()
+        if response.startswith('```json'):
+            response = response[7:]
+        elif response.startswith('```'):
+            response = response[3:]
+        if response.endswith('```'):
+            response = response[:-3]
+        response = response.strip()
+        
+        # Parse JSON
+        nutrition_data = json.loads(response)
+        
+        # Validate required fields
+        required_fields = ['calories', 'protein', 'carbs', 'fat', 'fiber']
+        if not all(field in nutrition_data for field in required_fields):
+            return None
+        
+        # Ensure numeric fields are valid
+        nutrition_data['calories'] = int(nutrition_data.get('calories', 0))
+        nutrition_data['protein'] = float(nutrition_data.get('protein', 0))
+        nutrition_data['carbs'] = float(nutrition_data.get('carbs', 0))
+        nutrition_data['fat'] = float(nutrition_data.get('fat', 0))
+        nutrition_data['fiber'] = float(nutrition_data.get('fiber', 0))
+        
+        # Ensure lists exist
+        nutrition_data['allergens'] = nutrition_data.get('allergens', [])
+        nutrition_data['dietary_tags'] = nutrition_data.get('dietary_tags', [])
+        
+        return nutrition_data
+        
+    except Exception as e:
+        print(f"Error estimating nutritional info: {e}")
+        return None

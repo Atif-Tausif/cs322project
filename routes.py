@@ -15,7 +15,7 @@ from services import (
     submit_delivery_bid, accept_delivery_bid,
     get_popular_dishes, get_top_rated_dishes, get_featured_chefs
 )
-from ai_service import get_ai_response, get_personalized_recommendations, get_flavor_profile_analysis
+from ai_service import get_ai_response, get_personalized_recommendations, get_flavor_profile_analysis, estimate_nutritional_info
 from models import User, Dish, Order, Complaint, ForumPost
 from utils import hash_password, save_uploaded_image
 from config import AppConfig
@@ -61,6 +61,9 @@ def dish_detail(dish_id):
     chef = get_user_by_id(dish.chef_id)
     dish_dict = dish.to_dict()
     dish_dict['chef_name'] = chef.username if chef else 'Unknown'
+    
+    # Try to get nutritional info if not cached (will be calculated via AJAX if needed)
+    # We don't calculate here to avoid slowing down page load
     
     return render_template('dish_detail.html', dish=dish_dict)
 
@@ -852,6 +855,44 @@ def api_forum_reply():
     save_forum_post(post)
     
     return jsonify({'success': True, 'message': 'Reply posted successfully'})
+
+@bp.route('/api/v1/nutrition/<dish_id>', methods=['GET'])
+def api_nutrition(dish_id):
+    """Get or calculate nutritional information for a dish"""
+    dish = get_dish_by_id(dish_id)
+    if not dish:
+        return jsonify({'success': False, 'message': 'Dish not found'}), 404
+    
+    # If nutrition info already exists, return it
+    if dish.nutritional_info:
+        return jsonify({
+            'success': True,
+            'nutritional_info': dish.nutritional_info,
+            'cached': True
+        })
+    
+    # Calculate nutrition using AI
+    nutrition_info = estimate_nutritional_info(
+        dish.name,
+        dish.description,
+        dish.category
+    )
+    
+    if nutrition_info:
+        # Save to dish
+        dish.nutritional_info = nutrition_info
+        save_dish(dish)
+        
+        return jsonify({
+            'success': True,
+            'nutritional_info': nutrition_info,
+            'cached': False
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Could not estimate nutritional information at this time'
+        }), 500
 
 # ============================================================================
 # Manager Routes

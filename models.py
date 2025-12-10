@@ -106,6 +106,11 @@ class Dish:
         
         # Flavor tags for recommendations
         self.flavor_tags = kwargs.get('flavor_tags', [])  # ['spicy', 'sweet', etc.]
+        
+        # Nutritional information (AI-estimated)
+        # Format: {'calories': int, 'protein': float, 'carbs': float, 'fat': float, 'fiber': float, 
+        #          'allergens': List[str], 'dietary_tags': List[str]}
+        self.nutritional_info = kwargs.get('nutritional_info', None)
     
     def to_dict(self) -> Dict:
         """Convert dish to dictionary"""
@@ -123,7 +128,8 @@ class Dish:
             'created_at': self.created_at,
             'available': self.available,
             'vip_only': self.vip_only,
-            'flavor_tags': self.flavor_tags
+            'flavor_tags': self.flavor_tags,
+            'nutritional_info': self.nutritional_info
         }
     
     @classmethod
