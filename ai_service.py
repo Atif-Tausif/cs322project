@@ -256,6 +256,44 @@ def get_personalized_recommendations(user_id: str, limit: int = 6) -> List[Dict]
     recommendations.sort(key=lambda x: x['match_score'], reverse=True)
     return recommendations[:limit]
 
+def get_flavor_preferences_from_orders(user_id: str) -> Optional[Dict]:
+    """
+    Calculate flavor preferences from user's order history
+    Returns: Dictionary with flavor tags as keys and percentages as values
+    """
+    user_orders = get_orders_by_customer(user_id)
+    if not user_orders:
+        return None
+    
+    dishes = get_all_dishes()
+    dishes_dict = {d.id: d for d in dishes}
+    
+    # Count occurrences of each flavor tag across all ordered dishes
+    flavor_counts = {}
+    total_dishes = 0
+    
+    for order in user_orders:
+        for item in order.items:
+            dish_id = item.get('dish_id')
+            dish = dishes_dict.get(dish_id)
+            
+            if dish and dish.flavor_tags:
+                total_dishes += 1
+                for tag in dish.flavor_tags:
+                    flavor_counts[tag] = flavor_counts.get(tag, 0) + 1
+    
+    if total_dishes == 0:
+        return None
+    
+    # Calculate percentages (how often each flavor appears)
+    flavor_preferences = {}
+    for tag, count in flavor_counts.items():
+        # Calculate percentage: (count / total_dishes) * 100
+        percentage = (count / total_dishes) * 100
+        flavor_preferences[tag] = round(percentage, 1)
+    
+    return flavor_preferences if flavor_preferences else None
+
 def get_flavor_profile_analysis(user_id: str) -> Dict:
     """
     Analyze user's flavor profile and provide insights
@@ -265,15 +303,33 @@ def get_flavor_profile_analysis(user_id: str) -> Dict:
         return {}
     
     profile = user.flavor_profile
-    max_tag = max(profile.items(), key=lambda x: x[1]) if profile else None
+    
+    # Ensure profile is a dict and not empty
+    if not profile or not isinstance(profile, dict) or len(profile) == 0:
+        return {
+            'dominant_flavor': None,
+            'profile': profile or {},
+            'recommendations': []
+        }
+    
+    # Find dominant flavor (highest value)
+    # Only consider flavors with value > 0
+    valid_items = [(tag, value) for tag, value in profile.items() if value > 0]
+    
+    if not valid_items:
+        # All values are 0, no dominant flavor
+        max_tag = None
+    else:
+        max_tag = max(valid_items, key=lambda x: x[1])
     
     analysis = {
-        'dominant_flavor': max_tag[0] if max_tag and max_tag[1] > 0 else None,
+        'dominant_flavor': max_tag[0] if max_tag else None,
         'profile': profile,
         'recommendations': []
     }
     
-    if max_tag:
+    # Get recommendations based on dominant flavor
+    if max_tag and max_tag[1] > 0:
         dishes = get_all_dishes()
         matching_dishes = [d for d in dishes if max_tag[0] in d.flavor_tags and d.available]
         analysis['recommendations'] = [d.to_dict() for d in matching_dishes[:5]]

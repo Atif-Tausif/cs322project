@@ -68,6 +68,10 @@ def calculate_flavor_match(user_flavor_preferences: dict, dish_flavor_tags: list
     if not dish_flavor_tags:
         return 0.0
     
+    # Safety check: ensure user_flavor_preferences is a valid dict
+    if not user_flavor_preferences or not isinstance(user_flavor_preferences, dict):
+        return 0.0
+    
     # Sum up the percentages for all flavor tags in the dish
     total_match = 0.0
     
