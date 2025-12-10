@@ -242,13 +242,13 @@ def save_delivery_bid(bid: DeliveryBid):
 
 # Knowledge base operations
 def get_knowledge_base() -> List[Dict]:
-    """Get all knowledge base entries"""
+    """Get all knowledge base entries from JSON file"""
     data = load_json(KNOWLEDGE_BASE_FILE, [])
-    # Merge with default knowledge base from config
-    from config import KNOWLEDGE_BASE as DEFAULT_KB
-    default_ids = {hash(entry['question']) for entry in DEFAULT_KB}
-    user_entries = [e for e in data if e.get('id') not in default_ids]
-    return DEFAULT_KB + user_entries
+    # Ensure all entries have IDs
+    for entry in data:
+        if 'id' not in entry:
+            entry['id'] = f"kb_{hash(entry.get('question', ''))}"
+    return data
 
 def save_knowledge_entry(entry: Dict):
     """Save a knowledge base entry"""
@@ -284,19 +284,42 @@ def save_knowledge_rating(entry_id: str, rating: int, user_id: str):
         if entry:
             entry['flagged'] = True
             entry['flagged_by'] = user_id
-            if entry.get('id', '').startswith('kb_'):
-                # User-contributed entry, save to file
-                user_entries = load_json(KNOWLEDGE_BASE_FILE, [])
-                for i, e in enumerate(user_entries):
-                    if e.get('id') == entry_id:
-                        user_entries[i] = entry
-                        save_json(KNOWLEDGE_BASE_FILE, user_entries)
-                        break
+            entry['flagged_at'] = datetime.now().isoformat()
+            
+            # Check if it's a default entry (from config) or user-contributed
+            user_entries = load_json(KNOWLEDGE_BASE_FILE, [])
+            existing_index = next((i for i, e in enumerate(user_entries) if e.get('id') == entry_id), None)
+            
+            if existing_index is not None:
+                # User-contributed entry, update in file
+                user_entries[existing_index]['flagged'] = True
+                user_entries[existing_index]['flagged_by'] = user_id
+                user_entries[existing_index]['flagged_at'] = datetime.now().isoformat()
+                save_json(KNOWLEDGE_BASE_FILE, user_entries)
+            else:
+                # Entry not found in file, update it with flag info
+                entry_copy = entry.copy()
+                entry_copy['id'] = entry_id  # Ensure ID is preserved
+                entry_copy['question'] = entry.get('question', '')
+                entry_copy['answer'] = entry.get('answer', '')
+                entry_copy['tags'] = entry.get('tags', [])
+                entry_copy['approved'] = entry.get('approved', True)
+                user_entries.append(entry_copy)
+                save_json(KNOWLEDGE_BASE_FILE, user_entries)
 
 def get_flagged_knowledge_entries() -> List[Dict]:
     """Get flagged knowledge base entries for manager review"""
     entries = get_knowledge_base()
-    return [e for e in entries if e.get('flagged', False)]
+    flagged = [e for e in entries if e.get('flagged', False)]
+    # Add user information for flagged entries
+    for entry in flagged:
+        if entry.get('flagged_by'):
+            user = get_user_by_id(entry['flagged_by'])
+            entry['flagged_by_username'] = user.username if user else 'Unknown'
+        if entry.get('author_id'):
+            author = get_user_by_id(entry['author_id'])
+            entry['author_username'] = author.username if author else 'System'
+    return flagged
 
 def reset_database():
     """Reset all database files (for initialization)"""

@@ -254,6 +254,73 @@
         </div>
     </div>
     
+    <!-- Flagged Knowledge Base Entries (shown with complaints) -->
+    {% if flagged_kb %}
+    <div class="card mb-4 border-warning">
+        <div class="card-header bg-warning text-dark">
+            <h5><i class="fas fa-flag"></i> Flagged Knowledge Base Entries (Rating: 0)</h5>
+            <small>These entries received a rating of 0 (outrageous) and need review</small>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Question</th>
+                            <th>Answer</th>
+                            <th>Type</th>
+                            <th>Flagged By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in flagged_kb %}
+                        <tr>
+                            <td><strong>{{ entry.question }}</strong></td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 300px;" title="{{ entry.answer }}">
+                                    {{ entry.answer }}
+                                </div>
+                            </td>
+                            <td>
+                                {% if entry.is_manager_entry %}
+                                    <span class="badge bg-primary">Manager Entry</span>
+                                {% elif entry.author_id %}
+                                    <span class="badge bg-secondary">User Contribution</span>
+                                {% else %}
+                                    <span class="badge bg-info">System</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if entry.flagged_by_username %}
+                                    {{ entry.flagged_by_username }}
+                                {% else %}
+                                    Unknown
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('main.manager_approve_knowledge', entry_id=entry.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success" title="Keep this entry (unflag)">
+                                        <i class="fas fa-check"></i> Keep
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('main.manager_remove_knowledge', entry_id=entry.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-danger" 
+                                            onclick="return confirm('Are you sure you want to remove this entry?')" 
+                                            title="Remove this entry">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Orders Ready for Delivery -->
     <div class="card mb-4">
         <div class="card-header">
@@ -370,46 +437,6 @@
         </div>
     </div>
     
-    <!-- Flagged Knowledge Base Entries -->
-    {% if flagged_kb %}
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5><i class="fas fa-flag"></i> Flagged Knowledge Base Entries</h5>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Question</th>
-                            <th>Answer</th>
-                            <th>Author</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for entry in flagged_kb %}
-                        <tr>
-                            <td>{{ entry.question }}</td>
-                            <td>{{ entry.answer[:50] }}...</td>
-                            <td>{{ entry.author_id or 'System' }}</td>
-                            <td>
-                                <form method="POST" action="{{ url_for('main.manager_approve_knowledge', entry_id=entry.id) }}" class="d-inline">
-                                    <button type="submit" class="btn btn-sm btn-success">Keep</button>
-                                </form>
-                                <form method="POST" action="{{ url_for('main.manager_remove_knowledge', entry_id=entry.id) }}" class="d-inline">
-                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove entry and ban author?')">Remove & Ban</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-    
     <!-- Pending Knowledge Base Submissions -->
     {% if pending_kb %}
     <div class="card mb-4">
@@ -449,6 +476,41 @@
         </div>
     </div>
     {% endif %}
+    
+    <!-- Add Knowledge Base Entry (Manager Only) -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-plus-circle"></i> Add Knowledge Base Entry</h5>
+            <small class="text-muted">Add new entries to the knowledge base (auto-approved)</small>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('main.manager_add_knowledge') }}">
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="kb_question" class="form-label">Question</label>
+                        <input type="text" class="form-control" id="kb_question" name="question" 
+                               placeholder="e.g., What are your hours?" required>
+                    </div>
+                    <div class="col-md-12 mb-3">
+                        <label for="kb_answer" class="form-label">Answer</label>
+                        <textarea class="form-control" id="kb_answer" name="answer" rows="3" 
+                                  placeholder="e.g., We're open Monday through Sunday from 11:00 AM to 10:00 PM." required></textarea>
+                    </div>
+                    <div class="col-md-12 mb-3">
+                        <label for="kb_tags" class="form-label">Tags (comma-separated)</label>
+                        <input type="text" class="form-control" id="kb_tags" name="tags" 
+                               placeholder="e.g., hours, time, open">
+                        <small class="form-text text-muted">Tags help match user questions to this entry</small>
+                    </div>
+                    <div class="col-md-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Add Entry
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
     
     <!-- Manage Accounts -->
     <div class="card mb-4">

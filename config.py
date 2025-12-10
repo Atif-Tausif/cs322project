@@ -72,37 +72,3 @@ class AppConfig:
     UPLOAD_FOLDER = BASE_DIR / "static" / "images"
     MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5MB
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-
-# Knowledge Base (for AI chat)
-KNOWLEDGE_BASE = [
-    {
-        "question": "What are your hours?",
-        "answer": "We're open Monday through Sunday from 11:00 AM to 10:00 PM.",
-        "tags": ["hours", "time", "open"]
-    },
-    {
-        "question": "Do you offer delivery?",
-        "answer": "Yes! We offer delivery service. VIP members get 1 free delivery per 3 orders.",
-        "tags": ["delivery", "shipping"]
-    },
-    {
-        "question": "How do I become a VIP member?",
-        "answer": "You can become a VIP member by spending $100 or by making 3 orders without any complaints. VIP members enjoy a 5% discount and free delivery benefits!",
-        "tags": ["vip", "membership", "benefits"]
-    },
-    {
-        "question": "What payment methods do you accept?",
-        "answer": "We use a deposit-based system. You need to maintain a balance in your account to place orders.",
-        "tags": ["payment", "deposit", "balance"]
-    },
-    {
-        "question": "Can I cancel my order?",
-        "answer": "Please contact our customer service through the chat if you need to cancel an order. Cancellation policies may vary based on order status.",
-        "tags": ["cancel", "order", "refund"]
-    },
-    {
-        "question": "How do I rate a dish?",
-        "answer": "After receiving your order, you can rate both the food (1-5 stars) and delivery service (1-5 stars) separately on your order history page.",
-        "tags": ["rating", "review", "feedback"]
-    }
-]

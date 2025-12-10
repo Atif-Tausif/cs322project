@@ -5,7 +5,7 @@ import os
 import requests
 import json
 from typing import Dict, List, Optional, Tuple
-from config import LLMConfig, KNOWLEDGE_BASE
+from config import LLMConfig
 from database import get_knowledge_base, save_knowledge_rating, get_flagged_knowledge_entries
 from database import get_all_dishes, get_user_by_id, get_orders_by_customer, get_all_users
 from utils import calculate_flavor_match

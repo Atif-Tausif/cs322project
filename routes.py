@@ -1111,18 +1111,28 @@ def manager_manage_account():
 @require_login
 @require_role('manager')
 def manager_approve_knowledge(entry_id):
-    """Approve a knowledge base entry"""
+    """Approve a knowledge base entry or unflag a flagged entry"""
     from database import get_knowledge_base, save_json, KNOWLEDGE_BASE_FILE, load_json
     entries = get_knowledge_base()
     user_entries = load_json(KNOWLEDGE_BASE_FILE, [])
     
-    for entry in user_entries:
+    # Find and update the entry
+    found = False
+    for i, entry in enumerate(user_entries):
         if entry.get('id') == entry_id:
             entry['approved'] = True
             entry['flagged'] = False
+            # Remove flagged metadata
+            entry.pop('flagged_by', None)
+            entry.pop('flagged_at', None)
+            user_entries[i] = entry
             save_json(KNOWLEDGE_BASE_FILE, user_entries)
-            flash('Knowledge entry approved', 'success')
+            flash('Knowledge entry approved/unflagged', 'success')
+            found = True
             break
+    
+    if not found:
+        flash('Entry not found', 'error')
     
     return redirect(url_for('main.manager_dashboard'))
 
@@ -1130,25 +1140,49 @@ def manager_approve_knowledge(entry_id):
 @require_login
 @require_role('manager')
 def manager_remove_knowledge(entry_id):
-    """Remove a bad knowledge base entry and ban author"""
-    from database import delete_knowledge_entry, get_knowledge_base, get_user_by_id, save_user
-    from database import load_json, save_json, KNOWLEDGE_BASE_FILE
+    """Remove a knowledge base entry"""
+    from database import delete_knowledge_entry, get_knowledge_base
     
-    # Get entry to find author
+    # Get entry to verify it exists
     entries = get_knowledge_base()
     entry = next((e for e in entries if e.get('id') == entry_id), None)
     
-    if entry and entry.get('author_id'):
-        # Ban author from contributing
-        author = get_user_by_id(entry['author_id'])
-        if author:
-            author.blacklisted = True
-            save_user(author)
-            flash(f'Entry removed and author {author.username} banned from contributing', 'info')
+    if entry:
+        # Remove entry from JSON file
+        delete_knowledge_entry(entry_id)
+        flash('Knowledge base entry removed successfully', 'success')
+    else:
+        flash('Entry not found', 'error')
     
-    # Remove entry
-    delete_knowledge_entry(entry_id)
+    return redirect(url_for('main.manager_dashboard'))
+
+@bp.route('/manager/knowledge/add', methods=['POST'])
+@require_login
+@require_role('manager')
+def manager_add_knowledge():
+    """Add a new knowledge base entry (manager only)"""
+    question = request.form.get('question', '').strip()
+    answer = request.form.get('answer', '').strip()
+    tags_str = request.form.get('tags', '').strip()
     
+    if not question or not answer:
+        flash('Question and answer are required', 'error')
+        return redirect(url_for('main.manager_dashboard'))
+    
+    # Parse tags (comma-separated)
+    tags = [tag.strip() for tag in tags_str.split(',') if tag.strip()] if tags_str else []
+    
+    from database import save_knowledge_entry
+    save_knowledge_entry({
+        'question': question,
+        'answer': answer,
+        'tags': tags,
+        'author_id': session.get('user_id'),
+        'approved': True,  # Manager entries are auto-approved
+        'is_manager_entry': True
+    })
+    
+    flash('Knowledge base entry added successfully', 'success')
     return redirect(url_for('main.manager_dashboard'))
 
 @bp.route('/manager/delivery/accept', methods=['POST'])
