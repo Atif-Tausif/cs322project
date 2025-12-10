@@ -20,7 +20,7 @@ class FlaskConfig:
     
 # LLM Configuration
 class LLMConfig:
-    PROVIDER = os.environ.get('LLM_PROVIDER', 'ollama')
+    PROVIDER = os.environ.get('LLM_PROVIDER', 'gemini')
 
     # Ollama
     OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
@@ -32,7 +32,7 @@ class LLMConfig:
     HUGGINGFACE_API_URL = 'https://router.huggingface.co'
 
     # Gemini
-    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDksrXk3tM2rEKCd9gr8TTOo16_ue3BLkY")
     GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 

@@ -7,7 +7,7 @@ import json
 from typing import Dict, List, Optional, Tuple
 from config import LLMConfig, KNOWLEDGE_BASE
 from database import get_knowledge_base, save_knowledge_rating, get_flagged_knowledge_entries
-from database import get_all_dishes, get_user_by_id, get_orders_by_customer
+from database import get_all_dishes, get_user_by_id, get_orders_by_customer, get_all_users
 from utils import calculate_flavor_match
 
 def search_knowledge_base(query: str) -> Optional[Dict]:
@@ -140,21 +140,79 @@ def call_huggingface(prompt: str) -> Optional[str]:
         print(f"HuggingFace error: {e}")
         return None
 
+def build_menu_context(user_id: Optional[str] = None) -> str:
+    """
+    Build comprehensive menu and restaurant context for AI
+    Returns: Formatted string with all menu information
+    """
+    dishes = get_all_dishes()
+    users = get_all_users()
+    chefs = {u.id: u.username for u in users if u.role == 'chef'}
+    
+    # Filter dishes based on user VIP status
+    if user_id:
+        user = get_user_by_id(user_id)
+        if user and user.role != 'vip':
+            dishes = [d for d in dishes if not d.vip_only]
+    
+    # Group dishes by category
+    menu_by_category = {}
+    for dish in dishes:
+        if dish.available:  # Only include available dishes
+            category = dish.category
+            if category not in menu_by_category:
+                menu_by_category[category] = []
+            
+            chef_name = chefs.get(dish.chef_id, 'Unknown Chef')
+            rating_str = f"{dish.rating:.1f}⭐" if dish.rating > 0 else "No ratings yet"
+            vip_note = " (VIP Only)" if dish.vip_only else ""
+            flavor_tags_str = ", ".join(dish.flavor_tags) if dish.flavor_tags else "No flavor tags"
+            
+            dish_info = f"- {dish.name} (${dish.price:.2f}){vip_note}\n"
+            dish_info += f"  Description: {dish.description}\n"
+            dish_info += f"  Chef: {chef_name} | Rating: {rating_str} | Category: {category}\n"
+            dish_info += f"  Flavor tags: {flavor_tags_str}\n"
+            dish_info += f"  Orders: {dish.orders_count} | ID: {dish.id}\n"
+            
+            menu_by_category[category].append(dish_info)
+    
+    # Build menu context string
+    menu_context = "\n=== CURRENT MENU ===\n\n"
+    
+    if not menu_by_category:
+        menu_context += "No dishes available at the moment.\n"
+    else:
+        for category in ['appetizers', 'main', 'desserts', 'beverages']:
+            if category in menu_by_category:
+                menu_context += f"\n{category.upper()}:\n"
+                menu_context += "\n".join(menu_by_category[category])
+                menu_context += "\n"
+    
+    # Add summary statistics
+    available_dishes = [d for d in dishes if d.available]
+    total_dishes = len(available_dishes)
+    
+    menu_context += f"\n=== MENU SUMMARY ===\n"
+    menu_context += f"Total available dishes: {total_dishes}\n"
+    
+    if available_dishes:
+        rated_dishes = [d for d in available_dishes if d.rating > 0]
+        if rated_dishes:
+            avg_rating = sum(d.rating for d in rated_dishes) / len(rated_dishes)
+            menu_context += f"Average dish rating: {avg_rating:.1f} stars\n"
+        
+        prices = [d.price for d in available_dishes]
+        if prices:
+            menu_context += f"Price range: ${min(prices):.2f} - ${max(prices):.2f}\n"
+    
+    return menu_context
+
 def get_ai_response(message: str, user_id: Optional[str] = None) -> Dict:
     """
     Get AI response to user message
     Returns: {'success': bool, 'reply': str, 'source': str}
     """
     
-
-    print("DEBUG LLM Provider:", LLMConfig.PROVIDER)
-    print("DEBUG HF Token Exists:", bool(LLMConfig.HUGGINGFACE_TOKEN))
-    print("DEBUG Model:", LLMConfig.HUGGINGFACE_MODEL)
-    print(LLMConfig.GEMINI_MODEL)
-
-
-
-
     # First, try knowledge base
     kb_result = search_knowledge_base(message)
     if kb_result:
@@ -165,19 +223,35 @@ def get_ai_response(message: str, user_id: Optional[str] = None) -> Dict:
             'entry_id': kb_result['entry_id']
         }
     
-    # Build context for LLM
+    # Build comprehensive context for LLM
     context = "You are a helpful customer service assistant for a restaurant. "
     context += "Answer questions about the menu, ordering, delivery, and general restaurant information. "
-    context += "Be friendly and concise. "
+    context += "Be friendly and concise. Use the menu information provided to answer specific questions about dishes, prices, and availability.\n\n"
     
+    # Add user context
     if user_id:
         user = get_user_by_id(user_id)
         if user:
-            context += f"The customer is {user.username}. "
+            context += f"Customer Information:\n"
+            context += f"- Username: {user.username}\n"
+            context += f"- Role: {user.role}\n"
             if user.role == 'vip':
-                context += "They are a VIP member. "
+                context += f"- VIP Benefits: 5% discount, free delivery (1 per 3 orders), access to special dishes\n"
+            context += "\n"
     
-    prompt = f"{context}\n\nCustomer: {message}\nAssistant:"
+    # Add full menu information
+    menu_context = build_menu_context(user_id)
+    context += menu_context
+    
+    # Add restaurant information
+    context += "\n=== RESTAURANT INFORMATION ===\n"
+    context += "- Hours: Monday through Sunday, 11:00 AM to 10:00 PM\n"
+    context += "- Payment: Deposit-based system (users maintain account balance)\n"
+    context += "- Delivery: Available (VIP members get 1 free delivery per 3 orders)\n"
+    context += "- VIP Membership: Available after spending $100 or making 3 orders without complaints\n"
+    context += "- VIP Benefits: 5% discount, free delivery benefits, access to special dishes\n"
+    
+    prompt = f"{context}\n\nCustomer Question: {message}\n\nAssistant Response:"
     
     # Try LLM
     reply = None
