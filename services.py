@@ -266,9 +266,38 @@ def file_complaint(complainant_id: str, target_id: str, target_type: str,
         target.complaints_count = max(0, target.complaints_count - weight)
     
     # Check for demotion/promotion
-    check_employee_performance(target)
+    # Only check performance for employees (chef/delivery)
+    # For complaints: only check for demotions (not bonuses)
+    # For compliments: check for both demotions and bonuses
+    if target.role in ['chef', 'delivery']:
+        if complaint_type == 'complaint':
+            # Only check for demotion when complaint is filed
+            _check_employee_demotion(target)
+        else:  # compliment
+            # Check for both demotion and bonus when compliment is filed
+            check_employee_performance(target)
     
     return True, "Complaint filed successfully"
+
+def _check_employee_demotion(employee):
+    """Check if employee should be demoted (internal function, only checks demotions, not bonuses)"""
+    if employee.role not in ['chef', 'delivery']:
+        return
+    
+    # Check for demotion only
+    low_rating = employee.rating > 0 and employee.rating < AppConfig.LOW_RATING_THRESHOLD
+    many_complaints = employee.complaints_count >= AppConfig.COMPLAINTS_FOR_DEMOTION
+    
+    if low_rating or many_complaints:
+        employee.demotions += 1
+        employee.salary = max(0, employee.salary * 0.9)  # 10% salary reduction
+        
+        if employee.demotions >= AppConfig.DEMOTIONS_BEFORE_FIRING:
+            # Fire employee (remove from system or mark as inactive)
+            employee.role = 'customer'  # Demote to customer
+            employee.approved = False
+        
+        save_user(employee)
 
 def check_employee_performance(employee):
     """Check employee performance and apply demotion/promotion"""

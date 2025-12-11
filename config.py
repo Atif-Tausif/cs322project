@@ -32,7 +32,7 @@ class LLMConfig:
     HUGGINGFACE_API_URL = 'https://router.huggingface.co'
 
     # Gemini
-    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAKZeZYVjOT2OtcZFTaqlOVdcTStGSZ1W8")
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
     GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 
