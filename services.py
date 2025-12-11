@@ -101,6 +101,7 @@ def process_order(customer_id: str, items: List[Dict], cart_total: float, delive
         if customer.total_spent >= AppConfig.VIP_SPENDING_THRESHOLD:
             customer.role = 'vip'
             customer.vip_since = datetime.now().isoformat()
+            customer.warnings = 0  # Clear warnings when promoted to VIP through spending
         elif customer.orders_count >= AppConfig.VIP_ORDERS_WITHOUT_COMPLAINTS and customer.complaints_count == 0:
             customer.role = 'vip'
             customer.vip_since = datetime.now().isoformat()
