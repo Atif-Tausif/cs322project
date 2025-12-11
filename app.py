@@ -291,14 +291,6 @@ def initialize_database():
             "tags": ["rating", "review", "feedback"],
             "approved": True,
             "is_manager_entry": True
-        },
-        {
-            "question": "Hello",
-            "answer": "Hi",
-            "tags": ["a"],
-            "author_id": "customer1",
-            "approved": False,
-            "id": "kb_-3364931573902036106"
         }
     ]
     
