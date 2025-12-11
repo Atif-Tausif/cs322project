@@ -3,6 +3,10 @@ Configuration settings for the Restaurant Order System
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Base directory
 BASE_DIR = Path(__file__).parent
@@ -25,11 +29,6 @@ class LLMConfig:
     # Ollama
     OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
     OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3')
-
-    # HuggingFace
-    HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN', '')
-    HUGGINGFACE_MODEL = os.environ.get('HUGGINGFACE_MODEL', 'tiiuae/falcon-7b-instruct')
-    HUGGINGFACE_API_URL = 'https://router.huggingface.co'
 
     # Gemini
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")

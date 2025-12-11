@@ -102,47 +102,6 @@ def call_ollama(prompt: str) -> Optional[str]:
         print(f"Ollama error: {e}")
         return None
 
-def call_huggingface(prompt: str) -> Optional[str]:
-    """Call HuggingFace API"""
-    try:
-        url = (
-        f"https://generativelanguage.googleapis.com/v1/models/"
-        f"{LLMConfig.GEMINI_MODEL}:generateContent?key={LLMConfig.GEMINI_API_KEY}"
-        )
-
-
-
-        headers = {
-            "Authorization": f"Bearer {LLMConfig.HUGGINGFACE_TOKEN}"
-        }
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_length": 200,
-                "temperature": 0.7
-            }
-        }
-        
-        response = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=LLMConfig.TIMEOUT
-        )
-        print("HF STATUS:", response.status_code)
-        print("HF RAW RESPONSE:", response.text[:500])
-
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get('generated_text', '')
-            return str(result)
-        return None
-    except Exception as e:
-        print(f"HuggingFace error: {e}")
-        return None
-
 def build_menu_context(user_id: Optional[str] = None) -> str:
     """
     Build comprehensive menu and restaurant context for AI
@@ -260,8 +219,6 @@ def get_ai_response(message: str, user_id: Optional[str] = None) -> Dict:
     reply = None
     if LLMConfig.PROVIDER == 'ollama':
         reply = call_ollama(prompt)
-    elif LLMConfig.PROVIDER == 'huggingface' and LLMConfig.HUGGINGFACE_TOKEN:
-        reply = call_huggingface(prompt)
     elif LLMConfig.PROVIDER == 'gemini':
         reply = call_gemini(prompt)
     
