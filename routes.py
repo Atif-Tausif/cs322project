@@ -15,7 +15,7 @@ from services import (
     submit_delivery_bid, accept_delivery_bid,
     get_popular_dishes, get_top_rated_dishes, get_featured_chefs
 )
-from ai_service import get_ai_response, get_personalized_recommendations, get_flavor_profile_analysis, estimate_nutritional_info
+from ai_service import get_ai_response, get_personalized_recommendations, get_flavor_profile_analysis, estimate_nutritional_info, generate_meal_plan
 from models import User, Dish, Order, Complaint, ForumPost
 from utils import hash_password, save_uploaded_image
 from config import AppConfig
@@ -893,6 +893,51 @@ def api_nutrition(dish_id):
             'success': False,
             'message': 'Could not estimate nutritional information at this time'
         }), 500
+
+@bp.route('/meal-planner')
+def meal_planner():
+    """Meal Planner page"""
+    return render_template('meal_planner.html')
+
+@bp.route('/api/v1/meal-plan/generate', methods=['POST'])
+def api_generate_meal_plan():
+    """Generate a meal plan based on user preferences"""
+    data = request.get_json()
+    
+    # Extract preferences
+    preferences = {
+        'meal_types': data.get('meal_types', ['main']),
+        'allergies': data.get('allergies', []),
+        'dietary_tags': data.get('dietary_tags', []),
+        'nutritional_goals': {
+            'high_protein': data.get('high_protein', False),
+            'low_calorie': data.get('low_calorie', False),
+            'high_fiber': data.get('high_fiber', False)
+        },
+        'max_calories': data.get('max_calories'),
+        'min_protein': data.get('min_protein'),
+        'cuisine_preference': data.get('cuisine_preference')
+    }
+    
+    # Get all available dishes
+    dishes = get_all_dishes()
+    
+    # Get user ID if logged in
+    user_id = session.get('user_id') if session.get('user_id') else None
+    
+    # Generate meal plan
+    meal_plan = generate_meal_plan(preferences, dishes, user_id)
+    
+    if meal_plan:
+        return jsonify({
+            'success': True,
+            'meal_plan': meal_plan
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Could not generate meal plan. Please adjust your preferences and try again.'
+        }), 400
 
 # ============================================================================
 # Manager Routes

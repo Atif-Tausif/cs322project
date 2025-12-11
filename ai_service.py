@@ -4,11 +4,14 @@ AI Service - LLM integration for chat and recommendations
 import os
 import requests
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from config import LLMConfig
 from database import get_knowledge_base, save_knowledge_rating, get_flagged_knowledge_entries
 from database import get_all_dishes, get_user_by_id, get_orders_by_customer, get_all_users
 from utils import calculate_flavor_match
+
+if TYPE_CHECKING:
+    from models import Dish
 
 def search_knowledge_base(query: str) -> Optional[Dict]:
     """
@@ -487,4 +490,223 @@ Return ONLY the JSON object, nothing else."""
         
     except Exception as e:
         print(f"Error estimating nutritional info: {e}")
+        return None
+
+def generate_meal_plan(
+    preferences: Dict,
+    available_dishes: List['Dish'],
+    user_id: Optional[str] = None
+) -> Optional[Dict]:
+    """
+    Generate a complete meal plan based on user preferences and nutritional requirements
+    
+    Args:
+        preferences: Dict with keys:
+            - meal_types: List[str] - ['appetizer', 'main', 'dessert', 'beverage']
+            - allergies: List[str] - ['dairy', 'nuts', 'gluten', etc.]
+            - nutritional_goals: Dict - {'high_protein': bool, 'low_calorie': bool, 'high_fiber': bool, etc.}
+            - max_calories: Optional[int]
+            - min_protein: Optional[float]
+            - cuisine_preference: Optional[str]
+            - dietary_tags: List[str] - ['vegetarian', 'vegan', 'keto-friendly', etc.]
+        available_dishes: List of all available dishes
+        user_id: Optional user ID for personalized recommendations
+    
+    Returns:
+        Dict with meal plan containing dishes and total nutrition info
+    """
+    try:
+        from database import save_dish
+        
+        # Filter dishes based on allergies and dietary requirements
+        filtered_dishes = []
+        for dish in available_dishes:
+            if not dish.available:
+                continue
+            
+            # Filter VIP-only dishes
+            if user_id:
+                user = get_user_by_id(user_id)
+                if dish.vip_only and (not user or user.role != 'vip'):
+                    continue
+            elif dish.vip_only:
+                continue
+            
+            # Get nutritional info (calculate if not cached)
+            if not dish.nutritional_info:
+                nutrition = estimate_nutritional_info(dish.name, dish.description, dish.category)
+                if nutrition:
+                    dish.nutritional_info = nutrition
+                    save_dish(dish)
+            
+            # Check allergies
+            if dish.nutritional_info:
+                allergens = dish.nutritional_info.get('allergens', [])
+                user_allergies = [a.lower() for a in preferences.get('allergies', [])]
+                if any(allergen.lower() in user_allergies for allergen in allergens):
+                    continue
+            
+            # Check dietary tags
+            if dish.nutritional_info:
+                dietary_tags = [t.lower() for t in dish.nutritional_info.get('dietary_tags', [])]
+                required_tags = [t.lower() for t in preferences.get('dietary_tags', [])]
+                if required_tags and not any(tag in dietary_tags for tag in required_tags):
+                    continue
+            
+            filtered_dishes.append(dish)
+        
+        if not filtered_dishes:
+            return None
+        
+        # Build context for AI
+        menu_context = "\n=== AVAILABLE DISHES ===\n\n"
+        dishes_by_category = {}
+        for dish in filtered_dishes:
+            category = dish.category
+            if category not in dishes_by_category:
+                dishes_by_category[category] = []
+            
+            nutrition_str = ""
+            if dish.nutritional_info:
+                n = dish.nutritional_info
+                nutrition_str = f" | Calories: {n.get('calories', 'N/A')}, Protein: {n.get('protein', 0):.1f}g"
+                if n.get('allergens'):
+                    nutrition_str += f" | Allergens: {', '.join(n.get('allergens', []))}"
+                if n.get('dietary_tags'):
+                    nutrition_str += f" | Dietary: {', '.join(n.get('dietary_tags', []))}"
+            
+            menu_context += f"- {dish.name} (${dish.price:.2f}) - {dish.category}{nutrition_str}\n"
+            menu_context += f"  Description: {dish.description}\n"
+            menu_context += f"  ID: {dish.id}\n\n"
+        
+        # Build preferences string
+        pref_str = "Meal Types Requested: " + ", ".join(preferences.get('meal_types', ['main'])) + "\n"
+        
+        if preferences.get('allergies'):
+            pref_str += f"Allergies to Avoid: {', '.join(preferences.get('allergies', []))}\n"
+        
+        if preferences.get('dietary_tags'):
+            pref_str += f"Dietary Requirements: {', '.join(preferences.get('dietary_tags', []))}\n"
+        
+        nutritional_goals = preferences.get('nutritional_goals', {})
+        if nutritional_goals.get('high_protein'):
+            pref_str += "Goal: High Protein\n"
+        if nutritional_goals.get('low_calorie'):
+            pref_str += "Goal: Low Calorie\n"
+        if nutritional_goals.get('high_fiber'):
+            pref_str += "Goal: High Fiber\n"
+        
+        if preferences.get('max_calories'):
+            pref_str += f"Max Total Calories: {preferences.get('max_calories')}\n"
+        
+        if preferences.get('min_protein'):
+            pref_str += f"Min Total Protein: {preferences.get('min_protein')}g\n"
+        
+        # Create AI prompt
+        prompt = f"""You are a nutritionist creating a balanced meal plan from the available dishes.
+
+{pref_str}
+
+{menu_context}
+
+Create a meal plan that matches these preferences. Select dishes from different categories to create a complete meal.
+Return ONLY valid JSON (no markdown, no explanation) in this exact format:
+{{
+    "meal_plan": {{
+        "appetizer": {{"dish_id": "<id>", "name": "<name>", "reason": "<why this was chosen>"}},
+        "main": {{"dish_id": "<id>", "name": "<name>", "reason": "<why this was chosen>"}},
+        "dessert": {{"dish_id": "<id>", "name": "<name>", "reason": "<why this was chosen>"}},
+        "beverage": {{"dish_id": "<id>", "name": "<name>", "reason": "<why this was chosen>"}}
+    }},
+    "meal_notes": "<overall explanation of the meal plan>"
+}}
+
+You can omit categories if not requested. Only include categories from: {', '.join(preferences.get('meal_types', ['main']))}.
+Return ONLY the JSON object, nothing else."""
+
+        response = call_gemini(prompt)
+        
+        if not response:
+            return None
+        
+        # Clean response
+        response = response.strip()
+        if response.startswith('```json'):
+            response = response[7:]
+        elif response.startswith('```'):
+            response = response[3:]
+        if response.endswith('```'):
+            response = response[:-3]
+        response = response.strip()
+        
+        # Parse JSON
+        meal_plan_data = json.loads(response)
+        
+        # Validate and enrich with dish data
+        meal_plan = meal_plan_data.get('meal_plan', {})
+        dishes_dict = {d.id: d for d in filtered_dishes}
+        
+        # Category mapping (AI might return singular, we use plural in system)
+        category_map = {
+            'appetizer': 'appetizers',
+            'main': 'main',
+            'dessert': 'desserts',
+            'beverage': 'beverages'
+        }
+        
+        result_dishes = {}
+        total_calories = 0
+        total_protein = 0
+        total_carbs = 0
+        total_fat = 0
+        total_fiber = 0
+        
+        for category_key, dish_info in meal_plan.items():
+            dish_id = dish_info.get('dish_id')
+            dish = dishes_dict.get(dish_id)
+            
+            # Map category to system format
+            category = category_map.get(category_key, category_key)
+            
+            if dish:
+                dish_data = {
+                    'id': dish.id,
+                    'name': dish.name,
+                    'description': dish.description,
+                    'price': dish.price,
+                    'image': dish.image,
+                    'category': dish.category,
+                    'reason': dish_info.get('reason', ''),
+                    'nutrition': dish.nutritional_info
+                }
+                
+                if dish.nutritional_info:
+                    n = dish.nutritional_info
+                    total_calories += n.get('calories', 0)
+                    total_protein += n.get('protein', 0)
+                    total_carbs += n.get('carbs', 0)
+                    total_fat += n.get('fat', 0)
+                    total_fiber += n.get('fiber', 0)
+                
+                result_dishes[category] = dish_data
+            else:
+                print(f"Warning: Dish with ID {dish_id} not found in filtered dishes")
+        
+        return {
+            'dishes': result_dishes,
+            'total_nutrition': {
+                'calories': round(total_calories),
+                'protein': round(total_protein, 1),
+                'carbs': round(total_carbs, 1),
+                'fat': round(total_fat, 1),
+                'fiber': round(total_fiber, 1)
+            },
+            'meal_notes': meal_plan_data.get('meal_notes', ''),
+            'total_price': sum(d['price'] for d in result_dishes.values())
+        }
+        
+    except Exception as e:
+        print(f"Error generating meal plan: {e}")
+        import traceback
+        traceback.print_exc()
         return None

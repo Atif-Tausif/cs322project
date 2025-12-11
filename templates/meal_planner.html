@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+
+{% block title %}AI Meal Planner - EBA Express{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="fas fa-utensils"></i> AI Meal Planner
+                <small class="text-muted">Create Your Perfect Meal</small>
+            </h1>
+            <p class="lead">Tell us what you're looking for, and our AI will create a personalized meal plan based on your preferences, dietary restrictions, and nutritional goals.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Form Section -->
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-sliders-h"></i> Your Preferences</h5>
+                </div>
+                <div class="card-body">
+                    <form id="mealPlanForm">
+                        <!-- Meal Types -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">What would you like? <span class="text-danger">*</span></label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="meal_types" value="appetizers" id="type-appetizer" checked>
+                                <label class="form-check-label" for="type-appetizer">
+                                    <i class="fas fa-seedling"></i> Appetizer
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="meal_types" value="main" id="type-main" checked>
+                                <label class="form-check-label" for="type-main">
+                                    <i class="fas fa-drumstick-bite"></i> Main Course
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="meal_types" value="desserts" id="type-dessert">
+                                <label class="form-check-label" for="type-dessert">
+                                    <i class="fas fa-birthday-cake"></i> Dessert
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="meal_types" value="beverages" id="type-beverage">
+                                <label class="form-check-label" for="type-beverage">
+                                    <i class="fas fa-glass-water"></i> Beverage
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Allergies -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Allergies to Avoid</label>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="allergies" value="dairy" id="allergy-dairy">
+                                        <label class="form-check-label" for="allergy-dairy">Dairy</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="allergies" value="nuts" id="allergy-nuts">
+                                        <label class="form-check-label" for="allergy-nuts">Nuts</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="allergies" value="gluten" id="allergy-gluten">
+                                        <label class="form-check-label" for="allergy-gluten">Gluten</label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="allergies" value="eggs" id="allergy-eggs">
+                                        <label class="form-check-label" for="allergy-eggs">Eggs</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="allergies" value="seafood" id="allergy-seafood">
+                                        <label class="form-check-label" for="allergy-seafood">Seafood</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="allergies" value="soy" id="allergy-soy">
+                                        <label class="form-check-label" for="allergy-soy">Soy</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dietary Requirements -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Dietary Requirements</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dietary_tags" value="vegetarian" id="diet-vegetarian">
+                                <label class="form-check-label" for="diet-vegetarian">Vegetarian</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dietary_tags" value="vegan" id="diet-vegan">
+                                <label class="form-check-label" for="diet-vegan">Vegan</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dietary_tags" value="gluten-free" id="diet-gluten-free">
+                                <label class="form-check-label" for="diet-gluten-free">Gluten-Free</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="dietary_tags" value="keto-friendly" id="diet-keto">
+                                <label class="form-check-label" for="diet-keto">Keto-Friendly</label>
+                            </div>
+                        </div>
+
+                        <!-- Nutritional Goals -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Nutritional Goals</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="high_protein" id="goal-protein" value="true">
+                                <label class="form-check-label" for="goal-protein">High Protein</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="low_calorie" id="goal-low-cal" value="true">
+                                <label class="form-check-label" for="goal-low-cal">Low Calorie</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="high_fiber" id="goal-fiber" value="true">
+                                <label class="form-check-label" for="goal-fiber">High Fiber</label>
+                            </div>
+                        </div>
+
+                        <!-- Nutritional Limits -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Nutritional Limits (Optional)</label>
+                            <div class="mb-3">
+                                <label for="max_calories" class="form-label">Max Calories</label>
+                                <input type="number" class="form-control" id="max_calories" name="max_calories" min="0" placeholder="e.g., 800">
+                            </div>
+                            <div class="mb-3">
+                                <label for="min_protein" class="form-label">Min Protein (grams)</label>
+                                <input type="number" class="form-control" id="min_protein" name="min_protein" min="0" step="0.1" placeholder="e.g., 30">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100" id="generateBtn">
+                            <i class="fas fa-magic"></i> Generate Meal Plan
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="col-lg-7">
+            <div id="loadingSection" class="d-none">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h5>Creating Your Perfect Meal Plan...</h5>
+                        <p class="text-muted">Our AI is analyzing your preferences and finding the best dishes for you!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="resultsSection" class="d-none">
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-check-circle"></i> Your Personalized Meal Plan</h5>
+                    </div>
+                    <div class="card-body" id="mealPlanContent">
+                        <!-- Meal plan will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Total Nutrition Summary -->
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Total Nutritional Summary</h5>
+                    </div>
+                    <div class="card-body" id="nutritionSummary">
+                        <!-- Nutrition summary will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Add to Cart Button -->
+                <div class="card shadow-sm">
+                    <div class="card-body text-center">
+                        <button class="btn btn-primary btn-lg" id="addToCartBtn">
+                            <i class="fas fa-shopping-cart"></i> Add Entire Meal Plan to Cart
+                        </button>
+                        <p class="text-muted mt-2 mb-0"><small>You can also add individual items from the meal plan</small></p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="errorSection" class="d-none">
+                <div class="alert alert-danger">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Error</h5>
+                    <p id="errorMessage"></p>
+                    <button class="btn btn-outline-danger" onclick="document.getElementById('errorSection').classList.add('d-none')">Dismiss</button>
+                </div>
+            </div>
+
+            <div id="initialSection">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-utensils fa-4x text-muted mb-3"></i>
+                        <h5>Ready to Create Your Meal?</h5>
+                        <p class="text-muted">Fill out the form on the left and click "Generate Meal Plan" to get started!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('mealPlanForm');
+    const generateBtn = document.getElementById('generateBtn');
+    const loadingSection = document.getElementById('loadingSection');
+    const resultsSection = document.getElementById('resultsSection');
+    const errorSection = document.getElementById('errorSection');
+    const initialSection = document.getElementById('initialSection');
+    const mealPlanContent = document.getElementById('mealPlanContent');
+    const nutritionSummary = document.getElementById('nutritionSummary');
+    const addToCartBtn = document.getElementById('addToCartBtn');
+
+    let currentMealPlan = null;
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Collect form data
+        const formData = {
+            meal_types: Array.from(form.querySelectorAll('input[name="meal_types"]:checked')).map(cb => cb.value),
+            allergies: Array.from(form.querySelectorAll('input[name="allergies"]:checked')).map(cb => cb.value),
+            dietary_tags: Array.from(form.querySelectorAll('input[name="dietary_tags"]:checked')).map(cb => cb.value),
+            high_protein: form.querySelector('#goal-protein').checked,
+            low_calorie: form.querySelector('#goal-low-cal').checked,
+            high_fiber: form.querySelector('#goal-fiber').checked,
+            max_calories: form.querySelector('#max_calories').value || null,
+            min_protein: form.querySelector('#min_protein').value || null
+        };
+
+        // Validate meal types
+        if (formData.meal_types.length === 0) {
+            alert('Please select at least one meal type!');
+            return;
+        }
+
+        // Show loading
+        initialSection.classList.add('d-none');
+        errorSection.classList.add('d-none');
+        resultsSection.classList.add('d-none');
+        loadingSection.classList.remove('d-none');
+        generateBtn.disabled = true;
+
+        try {
+            const response = await fetch('/api/v1/meal-plan/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.meal_plan) {
+                currentMealPlan = data.meal_plan;
+                displayMealPlan(data.meal_plan);
+                loadingSection.classList.add('d-none');
+                resultsSection.classList.remove('d-none');
+            } else {
+                throw new Error(data.message || 'Failed to generate meal plan');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('errorMessage').textContent = error.message || 'An error occurred while generating your meal plan. Please try again.';
+            loadingSection.classList.add('d-none');
+            errorSection.classList.remove('d-none');
+        } finally {
+            generateBtn.disabled = false;
+        }
+    });
+
+    function displayMealPlan(mealPlan) {
+        const dishes = mealPlan.dishes;
+        const categories = {
+            'appetizers': { icon: 'fa-seedling', title: 'Appetizer', plural: 'appetizers' },
+            'main': { icon: 'fa-drumstick-bite', title: 'Main Course', plural: 'main' },
+            'desserts': { icon: 'fa-birthday-cake', title: 'Dessert', plural: 'desserts' },
+            'beverages': { icon: 'fa-glass-water', title: 'Beverage', plural: 'beverages' }
+        };
+
+        let html = '';
+        
+        // Display dishes by category
+        for (const [category, info] of Object.entries(categories)) {
+            // Check both singular and plural forms
+            const dish = dishes[category] || dishes[info.plural];
+            if (dish) {
+                html += `
+                    <div class="mb-4 pb-4 border-bottom">
+                        <div class="d-flex align-items-start">
+                            <div class="me-3">
+                                <img src="${dish.image || '/static/images/default_dish.png'}" 
+                                     alt="${dish.name}" 
+                                     class="img-thumbnail" 
+                                     style="width: 100px; height: 100px; object-fit: cover;">
+                            </div>
+                            <div class="flex-grow-1">
+                                <h5>
+                                    <i class="fas ${info.icon} text-primary"></i> 
+                                    ${info.title}: ${dish.name}
+                                </h5>
+                                <p class="text-muted">${dish.description}</p>
+                                <p class="mb-2"><strong>Price:</strong> $${dish.price.toFixed(2)}</p>
+                                ${dish.reason ? `<p class="text-info mb-2"><i class="fas fa-lightbulb"></i> <em>${dish.reason}</em></p>` : ''}
+                                ${dish.nutrition ? `
+                                    <div class="small text-muted">
+                                        <strong>Nutrition:</strong> 
+                                        ${dish.nutrition.calories || 'N/A'} cal | 
+                                        ${(dish.nutrition.protein || 0).toFixed(1)}g protein | 
+                                        ${(dish.nutrition.carbs || 0).toFixed(1)}g carbs
+                                    </div>
+                                ` : ''}
+                                <a href="/dish/${dish.id}" class="btn btn-sm btn-outline-primary mt-2">
+                                    <i class="fas fa-info-circle"></i> View Details
+                                </a>
+                                <button class="btn btn-sm btn-success mt-2 ms-2 add-dish-to-cart" data-dish-id="${dish.id}">
+                                    <i class="fas fa-cart-plus"></i> Add to Cart
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        if (mealPlan.meal_notes) {
+            html += `
+                <div class="alert alert-info">
+                    <strong><i class="fas fa-comment-alt"></i> AI Notes:</strong>
+                    <p class="mb-0">${mealPlan.meal_notes}</p>
+                </div>
+            `;
+        }
+
+        mealPlanContent.innerHTML = html;
+
+        // Display nutrition summary
+        const total = mealPlan.total_nutrition;
+        nutritionSummary.innerHTML = `
+            <div class="row text-center">
+                <div class="col-md-3 mb-3">
+                    <div class="p-3 bg-light rounded">
+                        <h3 class="text-primary mb-0">${total.calories}</h3>
+                        <small class="text-muted">Calories</small>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="p-3 bg-light rounded">
+                        <h3 class="text-success mb-0">${total.protein}g</h3>
+                        <small class="text-muted">Protein</small>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="p-3 bg-light rounded">
+                        <h3 class="text-info mb-0">${total.carbs}g</h3>
+                        <small class="text-muted">Carbs</small>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="p-3 bg-light rounded">
+                        <h3 class="text-warning mb-0">${total.fat}g</h3>
+                        <small class="text-muted">Fat</small>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center mt-3">
+                <h5 class="text-primary">Total Price: <strong>$${mealPlan.total_price.toFixed(2)}</strong></h5>
+            </div>
+        `;
+
+        // Handle add dish to cart buttons
+        document.querySelectorAll('.add-dish-to-cart').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const dishId = this.getAttribute('data-dish-id');
+                addToCart(dishId, 1);
+            });
+        });
+    }
+
+    // Add entire meal plan to cart
+    addToCartBtn.addEventListener('click', function() {
+        if (!currentMealPlan || !currentMealPlan.dishes) return;
+        
+        let addedCount = 0;
+        const dishes = currentMealPlan.dishes;
+        
+        for (const dish of Object.values(dishes)) {
+            addToCart(dish.id, 1);
+            addedCount++;
+        }
+        
+        alert(`Added ${addedCount} item(s) to your cart!`);
+    });
+
+    function addToCart(dishId, quantity) {
+        fetch('/api/v1/cart/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                dish_id: dishId,
+                quantity: quantity
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update cart count if cart count element exists
+                const cartCount = document.getElementById('cart-count');
+                if (cartCount) {
+                    const currentCount = parseInt(cartCount.textContent) || 0;
+                    cartCount.textContent = currentCount + quantity;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error adding to cart:', error);
+        });
+    }
+});
+</script>
+{% endblock %}
+
