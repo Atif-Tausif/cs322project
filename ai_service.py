@@ -295,6 +295,9 @@ def get_personalized_recommendations(user_id: str, limit: int = 6) -> List[Dict]
     if user.role != 'vip':
         dishes = [d for d in dishes if not d.vip_only]
     
+    # Get flavor preferences from order history (same as menu)
+    flavor_preferences = get_flavor_preferences_from_orders(user_id)
+    
     # Calculate match scores
     recommendations = []
     for dish in dishes:
@@ -303,9 +306,9 @@ def get_personalized_recommendations(user_id: str, limit: int = 6) -> List[Dict]
         
         match_score = 0.0
         
-        # Flavor profile matching
-        if dish.flavor_tags:
-            match_score = calculate_flavor_match(user.flavor_profile, dish.flavor_tags)
+        # Flavor profile matching (same calculation as menu)
+        if flavor_preferences and dish.flavor_tags:
+            match_score = calculate_flavor_match(flavor_preferences, dish.flavor_tags)
         
         # Boost based on order history (if user ordered similar dishes)
         if user_orders:

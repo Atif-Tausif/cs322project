@@ -249,6 +249,63 @@ def initialize_database():
         
         print(f"Created {len(sample_dishes)} sample dishes")
     
+    # Initialize knowledge base with default entries
+    from database import save_json, KNOWLEDGE_BASE_FILE
+    knowledge_base_entries = [
+        {
+            "id": "kb_1",
+            "question": "What are your hours?",
+            "answer": "We're open Monday through Sunday from 11:00 AM to 10:00 PM.",
+            "tags": ["hours", "time", "open"],
+            "approved": True,
+            "is_manager_entry": True
+        },
+        {
+            "id": "kb_2",
+            "question": "Do you offer delivery?",
+            "answer": "Yes! We offer delivery service. VIP members get 1 free delivery per 3 orders.",
+            "tags": ["delivery", "shipping"],
+            "approved": True,
+            "is_manager_entry": True
+        },
+        {
+            "id": "kb_4",
+            "question": "What payment methods do you accept?",
+            "answer": "We use a deposit-based system. You need to maintain a balance in your account to place orders.",
+            "tags": ["payment", "deposit", "balance"],
+            "approved": True,
+            "is_manager_entry": True
+        },
+        {
+            "id": "kb_5",
+            "question": "Can I cancel my order?",
+            "answer": "Please contact our customer service through the chat if you need to cancel an order. Cancellation policies may vary based on order status.",
+            "tags": ["cancel", "order", "refund"],
+            "approved": True,
+            "is_manager_entry": True
+        },
+        {
+            "id": "kb_6",
+            "question": "How do I rate a dish?",
+            "answer": "After receiving your order, you can rate both the food (1-5 stars) and delivery service (1-5 stars) separately on your order history page.",
+            "tags": ["rating", "review", "feedback"],
+            "approved": True,
+            "is_manager_entry": True
+        },
+        {
+            "question": "Hello",
+            "answer": "Hi",
+            "tags": ["a"],
+            "author_id": "customer1",
+            "approved": False,
+            "id": "kb_-3364931573902036106"
+        }
+    ]
+    
+    # Initialize knowledge base (will overwrite if reset was called)
+    save_json(KNOWLEDGE_BASE_FILE, knowledge_base_entries)
+    print(f"Initialized knowledge base with {len(knowledge_base_entries)} entries")
+    
     print("Database initialization complete!")
 
 if __name__ == '__main__':

@@ -276,7 +276,6 @@ function createDishCard(dish) {
     
     const fullStarsHtml = '<i class="fas fa-star text-warning"></i>'.repeat(fullStars);
     const emptyStarsHtml = '<i class="far fa-star text-warning"></i>'.repeat(emptyStars);
-    const matchScoreHtml = dish.match_score ? `<small class="text-success"><i class="fas fa-check-circle"></i> ${dish.match_score}% match</small>` : '';
     
     // Create flavor tags HTML
     let flavorTagsHtml = '';
@@ -305,7 +304,6 @@ function createDishCard(dish) {
                             ${emptyStarsHtml}
                         </div>
                     </div>
-                    ${matchScoreHtml}
                 </div>
                 <div class="card-footer bg-white">
                     <a href="/dish/${dish.id}" class="btn btn-primary w-100">Order Now</a>

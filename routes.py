@@ -762,9 +762,9 @@ def api_rate_knowledge():
 
 @bp.route('/api/v1/knowledge/submit', methods=['POST'])
 @require_login
-@require_approved
+@require_role('manager')
 def api_submit_knowledge():
-    """Submit a knowledge base entry (customer contribution)"""
+    """Submit a knowledge base entry (manager only)"""
     data = request.get_json()
     question = data.get('question', '').strip()
     answer = data.get('answer', '').strip()
@@ -780,10 +780,10 @@ def api_submit_knowledge():
         'answer': answer,
         'tags': tags if isinstance(tags, list) else [],
         'author_id': user_id,
-        'approved': False  # Requires manager approval
+        'approved': True  # Manager entries are auto-approved
     })
     
-    return jsonify({'success': True, 'message': 'Knowledge entry submitted. Pending manager approval.'})
+    return jsonify({'success': True, 'message': 'Knowledge entry added successfully.'})
 
 @bp.route('/api/v1/forum/post', methods=['POST'])
 @require_login
