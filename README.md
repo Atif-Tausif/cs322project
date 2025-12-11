@@ -2,7 +2,7 @@
 
 A comprehensive Flask-based web application featuring AI-powered customer service, personalized food recommendations, intelligent flavor profiling, and a complete restaurant management system.
 
-## 🎯 Features
+## Features
 
 ### User Roles
 - **Visitors**: Browse menus, interact with AI chat, apply for registration
@@ -28,7 +28,7 @@ A comprehensive Flask-based web application featuring AI-powered customer servic
 - **Intelligent Chat**: AI-powered customer service with knowledge base integration
 - **Meal Plan Generator**: AI suggests appetizer + main + dessert combinations
 
-## 📋 Prerequisites
+## Prerequisites
 
 - **Python 3.8 or higher**
 - **pip** package manager
@@ -36,7 +36,7 @@ A comprehensive Flask-based web application featuring AI-powered customer servic
   - Google Gemini API (recommended for cloud/remote access)
   - Ollama (recommended for local development)
 
-## 🚀 Installation
+## Installation
 
 ### Step 1: Clone the Repository
 
@@ -165,7 +165,7 @@ This creates:
 - Sample dishes with images
 - Knowledge base entries
 
-## 🎮 Usage
+## Usage
 
 ### Starting the Application
 
@@ -205,7 +205,7 @@ The application will be available at: **http://localhost:5000**
 4. Register a new account or login with test credentials
 5. New registrations require manager approval
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -235,7 +235,7 @@ The system automatically selects the provider:
 2. If `LLM_PROVIDER=ollama` → Uses Ollama
 3. Falls back to Ollama if Gemini API key is missing
 
-## 📖 System Rules
+## System Rules
 
 ### Customer Progression
 - **New → Registered**: Manager approval required
@@ -270,59 +270,8 @@ The system automatically selects the provider:
 - Disputed complaints reviewed by manager
 - False complaints = 1 warning to complainant
 
-## 📁 Project Structure
 
-```
-cs322project/
-├── app.py                  # Flask application entry point
-├── routes.py               # All URL routes and API endpoints
-├── models.py               # Data models (User, Dish, Order, etc.)
-├── database.py             # JSON storage operations
-├── auth.py                 # Authentication & session management
-├── services.py             # Business logic
-├── ai_service.py           # LLM integration & AI features
-├── utils.py                # Helper functions
-├── config.py               # Configuration settings
-├── requirements.txt        # Python dependencies
-├── data/                   # JSON data files
-│   ├── users.json
-│   ├── dishes.json
-│   ├── orders.json
-│   ├── knowledge_base.json
-│   └── ...
-├── static/                 # Static assets
-│   ├── css/
-│   │   └── style.css
-│   ├── js/
-│   │   ├── main.js
-│   │   ├── chat.js
-│   │   ├── menu.js
-│   │   └── date-format.js
-│   └── images/
-│       ├── chefs/
-│       └── dishes/
-└── templates/              # HTML templates (Jinja2)
-    ├── base.html
-    ├── index.html
-    ├── menu.html
-    ├── login.html
-    ├── register.html
-    ├── profile.html
-    ├── orders.html
-    ├── cart.html
-    ├── forum.html
-    ├── meal_planner.html
-    ├── dish_detail.html
-    ├── manager/
-    │   └── dashboard.html
-    ├── chef/
-    │   ├── dashboard.html
-    │   └── add_dish.html
-    └── delivery/
-        └── dashboard.html
-```
-
-## 🌐 Key Web Pages
+## Key Web Pages
 
 - `/` - Home page with featured dishes and recommendations
 - `/menu` - Browse all dishes with filters and search
@@ -356,7 +305,7 @@ cs322project/
 - `POST /api/v1/complaint` - File complaint/compliment
 - `POST /api/v1/knowledge/rate` - Rate knowledge base response
 
-## 🧪 Development
+## Development
 
 ### Running in Development Mode
 
@@ -384,7 +333,7 @@ python app.py --reset
 4. Upload image, set price, add description and flavor tags
 5. Dish appears on menu immediately
 
-## 🚢 Deployment
+## Deployment
 
 ### Local Network Access
 
@@ -424,7 +373,7 @@ waitress-serve --host=0.0.0.0 --port=8000 app:app
 - Configure proper firewall rules
 - Use HTTPS with a reverse proxy (nginx/Apache)
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### AI Not Responding
 
@@ -478,7 +427,7 @@ rmdir /s flask_session  # Windows CMD
 python app.py --reset
 ```
 
-## 🛠️ Technologies Used
+## Technologies Used
 
 - **Flask 3.0**: Web framework
 - **Jinja2**: Template engine
@@ -490,27 +439,30 @@ python app.py --reset
 - **Pillow**: Image handling
 - **bcrypt**: Password security
 
-## 🌐 Browser Compatibility
+## Browser Compatibility
 
 - Chrome/Edge (recommended)
 - Firefox
 - Safari
 - Opera
 
-## 📝 License
+## License
 
 MIT License - Educational Project
 
-## 👥 Contributors
+## Contributors
 
-[Your Team Names Here]
+Atif Tausif
+Mahdi Mahin
+Mir Haque
+Raian Pial
+Arnob Hossain
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **LLM Providers**: Google Gemini, Ollama
-- **Course**: [Your Course Name]
-- **Instructor**: [Instructor Name]
+- **Course**: Software Engineering
+- **Instructor**: Prof. Jie Wei
 
----
 
-**Need Help?** Check the troubleshooting section or review the code comments in `ai_service.py` for AI configuration details.
+
